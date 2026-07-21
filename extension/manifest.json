@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Project Lockdown",
+  "version": "0.1.0",
+  "description": "Opt-in, disclosed safety guard in front of chatbots. See technical-design-doc.md.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "http://localhost:8000/*",
+    "http://localhost/*",
+    "https://project-lockdown-test.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "http://localhost/*",
+        "https://project-lockdown-test.vercel.app/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

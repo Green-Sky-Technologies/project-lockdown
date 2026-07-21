@@ -1,0 +1,49 @@
+# Recall gate wordlist — VIOLENCE_TO_OTHERS (design doc §4.2)
+#
+# CANONICAL SOURCE. Synced into the extension at build time (extension build step
+# reads this file). Runs client-side on every send with zero latency/cost; its
+# ONLY job is RECALL — "is this plausibly worth a classifier call?" Precision is
+# the classifier's job, so this is deliberately OVER-INCLUSIVE.
+#
+# Maintenance is a feedback-loop decision, not an editorial one: a term earns its
+# place if its flagged-and-later-confirmed rate justifies the classifier calls it
+# triggers (§4.2). The pipeline's wordlist-maintenance node surfaces terms that
+# fire constantly and never confirm for removal.
+#
+# Format: one term (or phrase) per line, lowercased. Blank lines and lines
+# starting with '#' are ignored. Matching is case-insensitive substring/word.
+
+kill
+shoot
+shooting
+gun
+guns
+firearm
+rifle
+ammo
+ammunition
+bomb
+explosive
+pipe bomb
+stab
+knife
+attack
+hurt
+beat up
+jump him
+jump her
+get rid of
+make them pay
+they deserve to
+plan to hurt
+hit list
+kill list
+school shooting
+shoot up
+blow up
+how to make a
+untraceable
+get revenge
+revenge on
+make a bomb
+where to buy a gun

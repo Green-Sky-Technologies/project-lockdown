@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://projectlockdown.org/schemas/classify-request.schema.json",
+  "title": "ClassifyRequest",
+  "description": "What a capture front-end POSTs to the core /classify endpoint. The core does not know or care where the text came from (design doc §3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["windowed_text", "category_set", "client_metadata"],
+  "properties": {
+    "windowed_text": {
+      "type": "array",
+      "description": "The client-side rolling window of recent turns. Both tiers receive this, not just the triggering message (design doc §4.3).",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Turn" }
+    },
+    "category_set": {
+      "type": "array",
+      "description": "Categories this install opted into and wants classified.",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["VIOLENCE_TO_OTHERS"]
+      }
+    },
+    "client_metadata": { "$ref": "#/$defs/ClientMetadata" },
+    "inline_tier2": {
+      "type": "boolean",
+      "description": "If true, run tier-2 inline in the same request and return the CONFIRMED verdict directly (skeleton convenience). If false/absent, return the PENDING tier-1 verdict and run tier-2 asynchronously.",
+      "default": false
+    }
+  },
+  "$defs": {
+    "Turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "text"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"]
+        },
+        "text": { "type": "string" }
+      }
+    },
+    "ClientMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chatbot_host", "capture_surface", "monitored_categories"],
+      "properties": {
+        "chatbot_host": {
+          "type": "string",
+          "description": "Host only, not full URL."
+        },
+        "capture_surface": {
+          "type": "string",
+          "enum": ["CHROMIUM_EXT", "FIREFOX_EXT", "MANAGED_CHROMEOS", "NATIVE_AGENT", "NETWORK_PROXY"]
+        },
+        "monitored_categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["VIOLENCE_TO_OTHERS"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://projectlockdown.org/schemas/verdict.schema.json",
+  "title": "Verdict",
+  "description": "The single source of truth for a safety-monitoring judgment. The lock decision is a threshold on it; the notification is a render of it; the dashboard card is a render of it; the feedback store logs it; the reviewer confirms or overturns it. See design doc §5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "verdict_id",
+    "created_at",
+    "stage",
+    "status",
+    "category",
+    "directed_at",
+    "severity",
+    "confidence",
+    "imminence",
+    "recommended_action",
+    "rationale",
+    "evidence_spans",
+    "context",
+    "sampling",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Contract version; every consumer checks this.",
+      "const": "1.0.0"
+    },
+    "verdict_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stable id across the pending→confirmed lifecycle."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stage": { "$ref": "#/$defs/Stage" },
+    "status": { "$ref": "#/$defs/Status" },
+    "category": { "$ref": "#/$defs/Category" },
+    "directed_at": { "$ref": "#/$defs/DirectedAt" },
+    "severity": { "$ref": "#/$defs/Severity" },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Calibrated; how sure the classifier is."
+    },
+    "imminence": { "$ref": "#/$defs/Imminence" },
+    "recommended_action": { "$ref": "#/$defs/RecommendedAction" },
+    "rationale": {
+      "type": "string",
+      "description": "Short model explanation, for the human reviewer."
+    },
+    "evidence_spans": {
+      "type": "array",
+      "description": "Pointers into the windowed text (offsets), not copies.",
+      "items": { "$ref": "#/$defs/EvidenceSpan" }
+    },
+    "context": { "$ref": "#/$defs/Context" },
+    "review": {
+      "description": "Populated on the async/human path only.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/Review" }
+      ],
+      "default": null
+    },
+    "sampling": { "$ref": "#/$defs/Sampling" },
+    "privacy": { "$ref": "#/$defs/Privacy" }
+  },
+  "$defs": {
+    "Stage": {
+      "type": "string",
+      "enum": ["RECALL_GATE", "TIER1", "TIER2", "HUMAN"]
+    },
+    "Status": {
+      "type": "string",
+      "enum": ["PENDING", "CONFIRMED", "CLEARED", "OVERTURNED"]
+    },
+    "Category": {
+      "type": "string",
+      "description": "VIOLENCE_TO_OTHERS is the only live category in v1; extensible (SELF_HARM, ...) as validated.",
+      "enum": ["VIOLENCE_TO_OTHERS"]
+    },
+    "DirectedAt": {
+      "type": "string",
+      "enum": ["OTHERS", "SELF", "FICTIONAL_OR_ACADEMIC", "AMBIGUOUS"]
+    },
+    "Severity": {
+      "type": "string",
+      "description": "How bad if true.",
+      "enum": ["LOW", "MODERATE", "HIGH", "CRITICAL"]
+    },
+    "Imminence": {
+      "type": "string",
+      "description": "How soon.",
+      "enum": ["NONE", "SPECULATIVE", "DEVELOPING", "IMMINENT"]
+    },
+    "RecommendedAction": {
+      "type": "string",
+      "enum": [
+        "NO_ACTION",
+        "LOG_ONLY",
+        "LOCK",
+        "LOCK_AND_NOTIFY",
+        "LOCK_NOTIFY_AND_SURFACE_CRISIS_RESOURCES"
+      ]
+    },
+    "CaptureSurface": {
+      "type": "string",
+      "enum": ["CHROMIUM_EXT", "FIREFOX_EXT", "MANAGED_CHROMEOS", "NATIVE_AGENT", "NETWORK_PROXY"]
+    },
+    "ReviewerOutcome": {
+      "type": "string",
+      "enum": ["CONFIRM", "OVERTURN", "NEEDS_MORE"]
+    },
+    "EvidenceSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "description": "Offset pointer into the windowed text; never a copy of the text.",
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "turn_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Which turn in the window the offsets refer to."
+        }
+      }
+    },
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["window_turn_count", "chatbot_host", "capture_surface", "monitored_categories"],
+      "properties": {
+        "window_turn_count": { "type": "integer", "minimum": 0 },
+        "chatbot_host": {
+          "type": "string",
+          "description": "Host only, not full URL. e.g. \"chatgpt.com\"."
+        },
+        "capture_surface": { "$ref": "#/$defs/CaptureSurface" },
+        "monitored_categories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Category" },
+          "description": "Which categories this install opted into."
+        }
+      }
+    },
+    "Review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_by", "reviewed_at", "reviewer_outcome", "notes"],
+      "properties": {
+        "reviewed_by": {
+          "type": ["string", "null"],
+          "description": "Role/id of expert reviewer (anonymized in store)."
+        },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "reviewer_outcome": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ReviewerOutcome" }]
+        },
+        "notes": { "type": ["string", "null"] }
+      }
+    },
+    "Sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["is_holdout", "suppression_eligible"],
+      "properties": {
+        "is_holdout": {
+          "type": "boolean",
+          "description": "True if force-classified for calibration measurement.",
+          "default": false
+        },
+        "suppression_eligible": {
+          "type": "boolean",
+          "description": "Would confidence have skipped tier-2?",
+          "default": false
+        }
+      }
+    },
+    "Privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deidentified", "retain_as_training", "raw_text_ref"],
+      "properties": {
+        "deidentified": {
+          "type": "boolean",
+          "description": "True once the de-id rewrite has replaced raw text.",
+          "default": false
+        },
+        "retain_as_training": {
+          "type": "boolean",
+          "description": "Policy decision; imminent real-threat cases may be false.",
+          "default": false
+        },
+        "raw_text_ref": {
+          "type": ["string", "null"],
+          "description": "Handle to raw text IF retained; null once de-id'd/purged.",
+          "default": null
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Node / extension
+node_modules/
+extension/dist/
+
+# Codegen scratch
+contract/codegen/_generated/
+
+# OS
+.DS_Store

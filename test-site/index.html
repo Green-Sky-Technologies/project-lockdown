@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Lockdown — Chatbot Test Harness</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!--
+      Set the emulated-host marker as early as possible, before the extension's
+      content script injects at document_idle, so it can resolve the right
+      adapter. mock.js sets it again (idempotent) on DOMContentLoaded.
+    -->
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search).get('host');
+        var known = { 'chatgpt.com': 'chatgpt', 'claude.ai': 'claude', 'gemini.google.com': 'gemini' };
+        var host = known[q] ? q : 'chatgpt.com';
+        document.documentElement.dataset.lockdownEmulate = host;
+        document.documentElement.dataset.theme = known[host];
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="logo">🔒</span>
+        <span id="brand">ChatGPT</span>
+        <span class="mock-tag">mock · test harness</span>
+      </div>
+      <nav id="switcher" class="switcher"><!-- host buttons injected --></nav>
+    </header>
+
+    <main class="chat">
+      <div id="thread" class="thread">
+        <div class="disclosure">
+          This is a <strong>mock</strong> chat page for testing the Project Lockdown
+          extension — there is no AI model behind it. Monitoring on this device is
+          disclosed. Send a message to see the extension capture it.
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-inner">
+          <div id="composer-input" class="composer-input"><!-- host composer injected --></div>
+          <div id="composer-send" class="composer-send"><!-- host send button injected --></div>
+        </div>
+        <div class="composer-hint">Enter to send · Shift+Enter for newline</div>
+      </div>
+    </main>
+
+    <script src="mock.js"></script>
+  </body>
+</html>
