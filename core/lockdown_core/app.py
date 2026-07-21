@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from lockdown_core.auth.clerk import AuthContext
+from lockdown_core.auth.dependencies import build_authorizer
+from lockdown_core.auth.ratelimit import RateLimiter
 from lockdown_core.classify.service import ClassificationService
 from lockdown_core.classify.types import Classifier
 from lockdown_core.contract.actions import Thresholds
@@ -46,6 +49,18 @@ def _build_pipeline(settings: Settings) -> PipelineRunner:
     return LangGraphPipeline()
 
 
+def _build_repository(settings: Settings):
+    """The Neon verdict store, or None when persistence is off/unconfigured.
+
+    Imported lazily HERE (composition root) so sqlalchemy stays off the hot path."""
+    if not settings.persist_verdicts or not settings.database_url:
+        return None
+    from lockdown_core.persistence import VerdictRepository, make_engine, make_sessionmaker
+
+    engine = make_engine(settings.database_url)
+    return VerdictRepository(make_sessionmaker(engine))
+
+
 def build_service(settings: Settings | None = None) -> ClassificationService:
     settings = settings or get_settings()
     return ClassificationService(
@@ -67,28 +82,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         summary="Stateless classifier that emits the verdict contract (design doc §5).",
     )
 
-    # The extension calls this cross-origin from the chatbot page.
+    # The background worker calls this cross-origin. Default "*" for local dev;
+    # set explicit extension + dashboard origins in production (settings).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # tighten to specific chatbot origins in production
+        allow_origins=settings.cors_allow_origins,
         allow_methods=["POST", "GET"],
         allow_headers=["*"],
     )
 
     service = build_service(settings)
+    authorize = build_authorizer(
+        settings,
+        RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst),
+    )
+    repository = _build_repository(settings)
+    if repository is not None:
+        from lockdown_core.persistence.repository import should_persist
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": app.version}
 
     @app.post("/classify", response_model=Verdict, response_model_exclude_none=False)
-    async def classify(req: ClassifyRequest) -> Verdict:
+    async def classify(
+        req: ClassifyRequest,
+        background: BackgroundTasks,
+        auth: AuthContext = Depends(authorize),
+    ) -> Verdict:
+        # `auth` identifies the account (rejects anonymous / rate-limited callers).
         # Defensive cap on window size (§4: proportionate capture).
         if len(req.windowed_text) > settings.max_window_turns:
             req = req.model_copy(
                 update={"windowed_text": req.windowed_text[-settings.max_window_turns :]}
             )
-        return await service.classify(req)
+        verdict = await service.classify(req)
+
+        # Persist lock/log verdicts off the response path (never NO_ACTION). A store
+        # outage never blocks the decision — save() swallows its own errors.
+        if repository is not None and should_persist(verdict):
+            background.add_task(
+                repository.save,
+                verdict,
+                clerk_user_id=auth.user_id,
+                clerk_org_id=auth.org_id,
+            )
+
+        return verdict
 
     return app
 

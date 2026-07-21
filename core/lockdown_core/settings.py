@@ -9,8 +9,22 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _as_str_list(v: object) -> object:
+    """Accept a JSON list, a comma-separated string, or an actual list for list[str]
+    settings. A bare comma-string is a common env footgun (e.g. Clerk's
+    authorized_parties, which MUST be a real list) — normalize it here."""
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("["):
+            return v  # let pydantic parse the JSON list
+        return [p.strip() for p in s.split(",") if p.strip()]
+    return v
 
 
 class Settings(BaseSettings):
@@ -48,6 +62,34 @@ class Settings(BaseSettings):
     # Wire the LangGraph async pipeline (design doc §7). Off in unit tests that
     # only exercise classify logic; on by default at the composition root.
     use_langgraph_pipeline: bool = True
+
+    # --- Auth (Clerk) ------------------------------------------------------ #
+    # Verified statelessly via JWKS by clerk-backend-api (no key stored client-side).
+    clerk_secret_key: str | None = Field(default=None, alias="CLERK_SECRET_KEY")
+    # The `azp` claim must match one of these: the extension origin + dashboard
+    # origin, e.g. ["chrome-extension://<id>", "https://dash.example.com"].
+    clerk_authorized_parties: list[str] = Field(default_factory=list)
+    # ESCAPE HATCH: false lets the core run unauthenticated for LOCAL DEV only.
+    # Production MUST set this true so every stored verdict is attributable (§8).
+    require_auth: bool = True
+
+    # --- Persistence (Neon) — wired in A2 ---------------------------------- #
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")  # pooled -pooler string
+    persist_verdicts: bool = True
+
+    # --- Per-account rate limiting (in-memory MVP) ------------------------- #
+    rate_limit_per_minute: int = 30
+    rate_limit_burst: int = 10
+
+    # --- CORS -------------------------------------------------------------- #
+    # Default "*" for local dev; in production set the extension + dashboard
+    # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
+    cors_allow_origins: list[str] = Field(default_factory=lambda: ["*"])
+
+    @field_validator("clerk_authorized_parties", "cors_allow_origins", mode="before")
+    @classmethod
+    def _split_lists(cls, v: object) -> object:
+        return _as_str_list(v)
 
 
 @lru_cache

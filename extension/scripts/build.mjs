@@ -10,6 +10,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const dist = resolve(root, 'dist');
 
+// Build-time config (no secrets in source). Override via env at build time.
+const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || 'pk_test_REPLACE_ME';
+const SYNC_HOST = process.env.SYNC_HOST || 'http://localhost:3000';
+const DEFAULT_CORE_URL = process.env.DEFAULT_CORE_URL || 'http://localhost:8000';
+
+if (CLERK_PUBLISHABLE_KEY === 'pk_test_REPLACE_ME') {
+  console.warn('[build] CLERK_PUBLISHABLE_KEY not set — auth will not work until you set it.');
+}
+
 // 1. Sync the wordlist from the canonical core copy.
 execFileSync(process.execPath, [resolve(here, 'gen-wordlist.mjs')], { stdio: 'inherit' });
 
@@ -17,9 +26,17 @@ execFileSync(process.execPath, [resolve(here, 'gen-wordlist.mjs')], { stdio: 'in
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 
-// 3. Bundle. Content script as IIFE (injected into the page); background as an
-//    ES module (manifest declares "type": "module").
-const common = { bundle: true, target: 'es2020', logLevel: 'info' };
+// 3. Bundle. Content script as IIFE (injected into the page); background + popup
+//    as ES modules. Clerk (in background/popup) expects a browser-ish global env.
+const define = {
+  __CLERK_PUBLISHABLE_KEY__: JSON.stringify(CLERK_PUBLISHABLE_KEY),
+  __SYNC_HOST__: JSON.stringify(SYNC_HOST),
+  __DEFAULT_CORE_URL__: JSON.stringify(DEFAULT_CORE_URL),
+  'process.env.NODE_ENV': JSON.stringify('production'),
+  global: 'globalThis',
+};
+const common = { bundle: true, target: 'es2020', logLevel: 'info', define };
+
 await esbuild.build({
   ...common,
   entryPoints: [resolve(root, 'src/content/index.ts')],
@@ -32,8 +49,15 @@ await esbuild.build({
   outfile: resolve(dist, 'background.js'),
   format: 'esm',
 });
+await esbuild.build({
+  ...common,
+  entryPoints: [resolve(root, 'src/popup/popup.ts')],
+  outfile: resolve(dist, 'popup.js'),
+  format: 'esm',
+});
 
 // 4. Static assets.
 await cp(resolve(root, 'manifest.json'), resolve(dist, 'manifest.json'));
+await cp(resolve(root, 'src/popup/popup.html'), resolve(dist, 'popup.html'));
 
 console.log('built extension -> dist/ (load unpacked at chrome://extensions)');

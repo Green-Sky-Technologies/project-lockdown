@@ -17,11 +17,20 @@ HOT_PATH_MODULES = [
 ]
 
 
-def test_langgraph_absent_from_hot_path():
+# Heavy/optional deps that must stay off the classifier hot path (design doc §4.3):
+# the async pipeline (langgraph), auth (clerk_backend_api), and persistence (sqlalchemy)
+# are all wired only at the composition root.
+FORBIDDEN_ON_HOT_PATH = ["langgraph", "clerk_backend_api", "sqlalchemy"]
+
+
+def test_forbidden_deps_absent_from_hot_path():
+    checks = " or ".join(
+        f"m=='{d}' or m.startswith('{d}.')" for d in FORBIDDEN_ON_HOT_PATH
+    )
     script = (
         "import sys;"
         + "".join(f"__import__('{m}');" for m in HOT_PATH_MODULES)
-        + "bad=[m for m in sys.modules if m=='langgraph' or m.startswith('langgraph.')];"
+        + f"bad=[m for m in sys.modules if {checks}];"
         + "print('LEAK:'+','.join(bad)) if bad else print('CLEAN');"
         + "sys.exit(1 if bad else 0)"
     )
@@ -30,7 +39,7 @@ def test_langgraph_absent_from_hot_path():
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"langgraph leaked onto the hot path: {result.stdout}{result.stderr}"
+    assert result.returncode == 0, f"forbidden dep leaked onto the hot path: {result.stdout}{result.stderr}"
     assert "CLEAN" in result.stdout
 
 

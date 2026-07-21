@@ -30,8 +30,22 @@ curl -s localhost:8000/classify -H 'content-type: application/json' -d '{
 ## Test
 
 ```bash
-uv run pytest            # action table, contract parity, /classify, architecture guard
+uv run pytest            # action table, contract parity, /classify, auth, persistence, architecture guard
 ```
+
+## Auth + persistence (production)
+
+`/classify` requires a Clerk session token unless `LOCKDOWN_REQUIRE_AUTH=false`
+(local-dev escape hatch). Flagged verdicts are attributed to the Clerk account and
+persisted to Neon. See `.env.example` for all vars. Run migrations against Neon:
+
+```bash
+DATABASE_URL='<neon pooled string>' uv run alembic upgrade head
+```
+
+The auth (`auth/`) and persistence (`persistence/`) modules are wired only at the
+composition root (`app.py`) — `clerk_backend_api` and `sqlalchemy` are kept off the
+classifier hot-path import graph (enforced by `tests/test_architecture.py`).
 
 ## Layout
 

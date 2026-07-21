@@ -13,5 +13,8 @@
     "@types/chrome": "^0.0.287",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@clerk/chrome-extension": "^3.1.54"
   }
 }

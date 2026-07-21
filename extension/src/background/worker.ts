@@ -1,33 +1,49 @@
 /**
  * Background service worker: the ONLY component that talks to the detection core.
- * Content scripts hand it a ClassifyRequest; it POSTs to the core and returns the
- * verdict. Cross-origin fetch to the core requires the core origin in
- * host_permissions (see manifest.json).
+ * Content scripts hand it a ClassifyRequest; it attaches the signed-in user's
+ * Clerk session token and POSTs to the core. No token / a 401 → `needsSignIn`, so
+ * the content script can prompt the adult to sign in via the popup.
  */
 import type { ClassifyRequest, Verdict } from '../contract/verdict';
-
-// Core endpoint. TODO: make configurable via chrome.storage / options page.
-const CORE_URL = 'http://localhost:8000';
+import { getSessionToken } from '../auth/token';
+import { getCoreUrl } from '../config';
 
 interface ClassifyMessage {
   type: 'classify';
   payload: ClassifyRequest;
 }
 
+interface ClassifyResponse {
+  ok: boolean;
+  verdict?: Verdict;
+  error?: string;
+  needsSignIn?: boolean;
+}
+
+async function classify(payload: ClassifyRequest): Promise<ClassifyResponse> {
+  const token = await getSessionToken();
+  if (!token) return { ok: false, needsSignIn: true };
+
+  const coreUrl = await getCoreUrl();
+  try {
+    const r = await fetch(`${coreUrl}/classify`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (r.status === 401) return { ok: false, needsSignIn: true };
+    if (!r.ok) return { ok: false, error: `core ${r.status}` };
+    return { ok: true, verdict: (await r.json()) as Verdict };
+  } catch (e: unknown) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg: ClassifyMessage, _sender, sendResponse) => {
   if (msg?.type !== 'classify') return undefined;
-
-  fetch(`${CORE_URL}/classify`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(msg.payload),
-  })
-    .then((r) => {
-      if (!r.ok) throw new Error(`core ${r.status}`);
-      return r.json() as Promise<Verdict>;
-    })
-    .then((verdict) => sendResponse({ ok: true, verdict }))
-    .catch((e: unknown) => sendResponse({ ok: false, error: String(e) }));
-
+  classify(msg.payload).then(sendResponse);
   return true; // keep the message channel open for the async response
 });

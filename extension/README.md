@@ -22,6 +22,24 @@ select `extension/dist`.
 Run the core first (`cd core && … uvicorn lockdown_core.app:app`) so the
 background worker can reach `http://localhost:8000/classify`.
 
+### Auth build (Clerk)
+
+The worker attaches a Clerk session token to every `/classify` call; the popup
+handles sign-in. Bake your config in at build time:
+
+```bash
+CLERK_PUBLISHABLE_KEY='pk_…' \
+SYNC_HOST='https://your-dashboard.vercel.app' \
+DEFAULT_CORE_URL='https://your-core.example.com' \
+  npm run build
+```
+
+The manifest pins a `"key"`, so the extension ID is stable:
+`deocaekmmjagaicbdckdpnhjpebbooch` — register `chrome-extension://deocaekmmjagaicbdckdpnhjpebbooch`
+in Clerk (allowed origins) and the core (`LOCKDOWN_CLERK_AUTHORIZED_PARTIES`).
+Full sequence in the repo-root **`DEPLOY.md`**. For local dev, run the core with
+`LOCKDOWN_REQUIRE_AUTH=false` to skip sign-in.
+
 ## Try it
 
 Open one of the monitored hosts (chatgpt.com, claude.ai, gemini.google.com) and

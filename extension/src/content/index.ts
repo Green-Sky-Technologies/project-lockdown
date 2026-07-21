@@ -56,8 +56,17 @@ function maybeClassify(cfg: HostConfig, win: RollingWindow): void {
     inline_tier2: true,
   };
 
-  chrome.runtime.sendMessage({ type: 'classify', payload }, (resp?: { ok: boolean; verdict?: Verdict; error?: string }) => {
-    if (chrome.runtime.lastError || !resp?.ok || !resp.verdict) return;
-    if (crossesLockThreshold(resp.verdict.recommended_action)) showLock(resp.verdict);
-  });
+  chrome.runtime.sendMessage(
+    { type: 'classify', payload },
+    (resp?: { ok: boolean; verdict?: Verdict; error?: string; needsSignIn?: boolean }) => {
+      if (chrome.runtime.lastError || !resp) return;
+      if (resp.needsSignIn) {
+        // eslint-disable-next-line no-console
+        console.warn('[lockdown] sign in via the Project Lockdown popup to enable monitoring.');
+        return;
+      }
+      if (!resp.ok || !resp.verdict) return;
+      if (crossesLockThreshold(resp.verdict.recommended_action)) showLock(resp.verdict);
+    },
+  );
 }

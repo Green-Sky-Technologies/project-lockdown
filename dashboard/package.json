@@ -1,0 +1,25 @@
+{
+  "name": "project-lockdown-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Minimal read-only dashboard: adults review their flagged verdicts. Also the Clerk sync host for the extension.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.9.0",
+    "@neondatabase/serverless": "^0.10.4",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
