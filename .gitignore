@@ -10,6 +10,8 @@ venv/
 # Node / extension
 node_modules/
 extension/dist/
+test-site/dist/
+.playwright-mcp/
 
 # Codegen scratch
 contract/codegen/_generated/
