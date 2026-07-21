@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Lockdown — Chatbot Test Harness</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/src/styles.css" />
     <!--
       Set the emulated-host marker as early as possible, before the extension's
       content script injects at document_idle, so it can resolve the right
-      adapter. mock.js sets it again (idempotent) on DOMContentLoaded.
+      adapter. src/main.js sets it again (idempotent) on DOMContentLoaded.
     -->
     <script>
       (function () {
@@ -48,6 +48,6 @@
       </div>
     </main>
 
-    <script src="mock.js"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -24,6 +24,9 @@ switcher navigates there and reloads). The page advertises its mode via
 pick the right adapter on a non-real origin (see the resolver in
 `extension/src/content/index.ts`).
 
+This is a **Vite** project — `npm run dev` for a hot-reloading dev server, `npm
+run build` for a static `dist/` that Vercel's zero-config Vite preset serves.
+
 ## Run locally
 
 ```bash
@@ -31,20 +34,26 @@ pick the right adapter on a non-real origin (see the resolver in
 cd extension && npm run build          # then load extension/dist unpacked at chrome://extensions
 cd ../core && LOCKDOWN_USE_FAKE_CLASSIFIER=1 uv run uvicorn lockdown_core.app:app   # the detection core on :8000
 
-# serve this folder
-cd ../test-site && python3 -m http.server 5500
-# open http://localhost:5500/?host=chatgpt.com
+# dev server for this site
+cd ../test-site && npm install && npm run dev
+# open the printed URL, e.g. http://localhost:5173/?host=chatgpt.com
 ```
 
-The extension manifest already whitelists `http://localhost/*`, so the content
-script injects here. The background worker calls the core at
-`http://localhost:8000` — keep the core running or you'll get no verdict.
+The extension manifest whitelists `http://localhost/*` (match patterns ignore the
+port, so any Vite dev port is covered), so the content script injects here. The
+background worker calls the core at `http://localhost:8000` — keep the core
+running or you'll get no verdict.
+
+To preview the production build locally: `npm run build && npm run preview`.
 
 ## Deploy to Vercel
 
+Vercel auto-detects the Vite framework (build `vite build`, output `dist/`) — no
+`vercel.json` needed. Set **`test-site/` as the project root**.
+
 ```bash
 cd test-site
-vercel            # first run links the project; deploy from this folder as the root
+vercel            # first run links the project; pick test-site as the root dir
 vercel --prod
 ```
 

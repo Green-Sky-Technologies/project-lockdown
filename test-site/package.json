@@ -1,0 +1,15 @@
+{
+  "name": "project-lockdown-test-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mock chatbot page for testing the Project Lockdown extension (Vite).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
