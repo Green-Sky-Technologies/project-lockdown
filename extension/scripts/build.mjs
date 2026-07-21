@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Build the unpacked extension into dist/. */
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -10,7 +10,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const dist = resolve(root, 'dist');
 
-// Build-time config (no secrets in source). Override via env at build time.
+// Load build-time config from extension/.env (gitignored) if present, so secrets
+// aren't pasted on the command line. Existing process.env wins. See .env.example.
+async function loadDotenv(path) {
+  try {
+    for (const line of (await readFile(path, 'utf8')).split('\n')) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
+      if (m && !line.trimStart().startsWith('#') && process.env[m[1]] === undefined) {
+        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    }
+  } catch {
+    /* no .env — fine, use defaults / real env */
+  }
+}
+await loadDotenv(resolve(root, '.env'));
+
+// Build-time config (no secrets in source). Override via extension/.env or env.
 const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || 'pk_test_REPLACE_ME';
 const SYNC_HOST = process.env.SYNC_HOST || 'http://localhost:3000';
 const DEFAULT_CORE_URL = process.env.DEFAULT_CORE_URL || 'http://localhost:8000';

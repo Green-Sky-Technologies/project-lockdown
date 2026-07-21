@@ -17,6 +17,27 @@ You'll register that origin with Clerk and the core below. (To use your own key,
 regenerate with `openssl genrsa 2048 | openssl rsa -pubout -outform DER | base64`,
 put it in `manifest.json` `"key"`, and re-derive the ID.)
 
+## Secrets map — where each value comes from, and where it goes
+
+> **Rule:** the committed `*.env.example` files are **placeholders only**. Real
+> values go in the **gitignored** `.env` / `.env.local` files **and** in each
+> host's env settings (Render/Railway Variables, Vercel Environment Variables).
+> Never paste a real key or DB URL into a `.env.example`.
+
+| Value | Get it from | Where it goes |
+|---|---|---|
+| **Clerk publishable key** (`pk_…`, not secret) | Clerk → API keys | Dashboard: `.env.local` + Vercel (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`) · Extension: `extension/.env` (`CLERK_PUBLISHABLE_KEY`) |
+| **Clerk secret key** (`sk_…`, SERVER-ONLY) | Clerk → API keys | Dashboard: `.env.local` + Vercel (`CLERK_SECRET_KEY`) · Core: host env (`CLERK_SECRET_KEY`). **Never in the extension.** |
+| **Neon pooled `DATABASE_URL`** | Neon Console → Connection Details → **Pooled** (host has `-pooler`) | Core: host env (`DATABASE_URL`) · Dashboard: `.env.local` + Vercel (`DATABASE_URL`) · the `alembic upgrade` command |
+| **Anthropic API key** | console.anthropic.com → API keys (also set a **spend cap**) | Core: host env (`ANTHROPIC_API_KEY`) |
+| **LangSmith key** (optional) | smith.langchain.com → API keys | Core: host env (`LANGSMITH_API_KEY`) |
+| Extension origin (config, fixed) | `chrome-extension://deocaekmmjagaicbdckdpnhjpebbooch` | Clerk allowed origins · Core `LOCKDOWN_CLERK_AUTHORIZED_PARTIES` + `LOCKDOWN_CORS_ALLOW_ORIGINS` |
+| Dashboard origin (config) | your Vercel URL | Extension `SYNC_HOST` · Clerk sync host · Core authorized parties + CORS |
+| Core URL (config) | your Render/Railway URL | Extension `DEFAULT_CORE_URL` |
+
+Per-component templates: `core/.env.example`, `dashboard/.env.example`,
+`extension/.env.example` — each annotated with the same get-it/put-it notes.
+
 ## 1. Neon (database)
 1. Create a Neon project → copy the **pooled** connection string (host contains `-pooler`).
 2. Run migrations from `core/` with that URL:
