@@ -13,5 +13,7 @@ export const config = {
     // Skip Next internals and static files; run on everything else + API routes.
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
+    // Clerk auto-proxy path (handshake / account portal) — keep after api/trpc.
+    '/__clerk/:path*',
   ],
 };
