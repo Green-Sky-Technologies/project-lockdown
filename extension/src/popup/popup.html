@@ -6,21 +6,14 @@
       html,
       body {
         margin: 0;
-        width: 320px;
+        width: 300px;
         font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         color: #1a1a1a;
         background: #fff;
       }
       header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
         padding: 12px 16px;
         border-bottom: 1px solid #ececec;
-      }
-      .brand {
-        font-size: 14px;
         font-weight: 600;
       }
       #body {
@@ -34,42 +27,36 @@
       #status.active {
         color: #0a7d55;
       }
-      button.primary {
+      button {
         width: 100%;
         padding: 9px 14px;
-        border: none;
         border-radius: 8px;
-        background: #10a37f;
-        color: #fff;
         font: inherit;
         font-weight: 500;
         cursor: pointer;
+      }
+      button.primary {
+        border: none;
+        background: #10a37f;
+        color: #fff;
+      }
+      button.secondary {
+        border: 1px solid #d0d0d0;
+        background: #fff;
+        color: #333;
       }
       .hint {
         font-size: 12px;
         color: #888;
         margin: 10px 0 0;
       }
-      #user {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
     </style>
   </head>
   <body>
-    <header>
-      <span class="brand">🔒 Project Lockdown</span>
-    </header>
+    <header>🔒 Project Lockdown</header>
     <div id="body">
       <p id="status">Loading…</p>
-      <div id="signed-out" hidden>
-        <button id="signin" class="primary">Sign in</button>
-        <p class="hint">Opens sign-in in a new tab. After you sign in, monitoring activates automatically.</p>
-      </div>
-      <div id="signed-in" hidden>
-        <div id="user"></div>
-      </div>
+      <div id="actions"></div>
     </div>
     <script type="module" src="popup.js"></script>
   </body>
