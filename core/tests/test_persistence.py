@@ -155,6 +155,7 @@ def test_app_persists_locking_verdict_and_skips_no_action(monkeypatch):
     client = TestClient(
         appmod.create_app(
             Settings(
+                _env_file=None,  # hermetic: ignore the developer's core/.env
                 use_fake_classifier=True,
                 use_langgraph_pipeline=False,
                 require_auth=False,

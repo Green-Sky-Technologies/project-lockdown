@@ -8,6 +8,7 @@ the notifier stub, and the async pipeline. Keeps the hot path a thin
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -74,8 +75,27 @@ def build_service(settings: Settings | None = None) -> ClassificationService:
     )
 
 
+def apply_langsmith_env(settings: Settings) -> None:
+    """Mirror LANGSMITH_* from settings/.env into os.environ so the langsmith SDK
+    (which reads the environment directly) picks them up under a plain uvicorn run.
+    Real env vars win — we only fill what's unset.
+
+    Tracing is enabled ONLY when an API key is present: turning tracing on without
+    a key floods LangSmith 401 errors."""
+    if not settings.langsmith_api_key:
+        return
+    for name, val in (
+        ("LANGSMITH_TRACING", settings.langsmith_tracing or "true"),
+        ("LANGSMITH_API_KEY", settings.langsmith_api_key),
+        ("LANGSMITH_PROJECT", settings.langsmith_project),
+    ):
+        if val and name not in os.environ:
+            os.environ[name] = val
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    apply_langsmith_env(settings)
     app = FastAPI(
         title="Project Lockdown — Detection Core",
         version="0.1.0",

@@ -93,6 +93,14 @@ class Settings(BaseSettings):
     # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
 
+    # --- LangSmith tracing ------------------------------------------------- #
+    # The langsmith SDK reads these from os.environ; we mirror them from .env
+    # into the environment at startup (see app.apply_langsmith_env) so a plain
+    # `uvicorn` run picks them up. Leave tracing off to disable (no third-party).
+    langsmith_tracing: str | None = Field(default=None, alias="LANGSMITH_TRACING")
+    langsmith_api_key: str | None = Field(default=None, alias="LANGSMITH_API_KEY")
+    langsmith_project: str | None = Field(default=None, alias="LANGSMITH_PROJECT")
+
     @field_validator("clerk_authorized_parties", "cors_allow_origins", mode="before")
     @classmethod
     def _split_lists(cls, v: object) -> object:

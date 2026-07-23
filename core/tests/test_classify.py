@@ -17,7 +17,12 @@ def client() -> TestClient:
     # test (test_pipeline.py), and auth has test_auth.py — so run against the
     # NoOp pipeline with auth disabled here.
     app = create_app(
-        Settings(use_fake_classifier=True, use_langgraph_pipeline=False, require_auth=False)
+        Settings(
+            _env_file=None,  # hermetic: ignore the developer's core/.env
+            use_fake_classifier=True,
+            use_langgraph_pipeline=False,
+            require_auth=False,
+        )
     )
     return TestClient(app)
 

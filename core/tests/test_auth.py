@@ -25,7 +25,12 @@ def _req() -> dict:
 
 
 def _client(**overrides) -> TestClient:
-    base = dict(use_fake_classifier=True, use_langgraph_pipeline=False, persist_verdicts=False)
+    base = dict(
+        _env_file=None,  # hermetic: ignore the developer's core/.env
+        use_fake_classifier=True,
+        use_langgraph_pipeline=False,
+        persist_verdicts=False,
+    )
     base.update(overrides)
     return TestClient(create_app(Settings(**base)))
 
