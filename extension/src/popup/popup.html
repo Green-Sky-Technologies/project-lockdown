@@ -3,53 +3,74 @@
   <head>
     <meta charset="UTF-8" />
     <style>
+      html,
       body {
-        width: 300px;
         margin: 0;
-        padding: 16px;
+        width: 320px;
         font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         color: #1a1a1a;
+        background: #fff;
       }
-      h1 {
-        font-size: 15px;
-        margin: 0 0 4px;
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #ececec;
       }
-      .muted {
-        color: #666;
-        font-size: 12px;
-        margin: 0 0 14px;
+      .brand {
+        font-size: 14px;
+        font-weight: 600;
       }
-      #signin {
-        padding: 8px 14px;
+      #body {
+        padding: 16px;
+      }
+      #status {
+        font-size: 13px;
+        color: #444;
+        margin: 0 0 12px;
+      }
+      #status.active {
+        color: #0a7d55;
+      }
+      button.primary {
+        width: 100%;
+        padding: 9px 14px;
         border: none;
         border-radius: 8px;
         background: #10a37f;
         color: #fff;
         font: inherit;
+        font-weight: 500;
         cursor: pointer;
+      }
+      .hint {
+        font-size: 12px;
+        color: #888;
+        margin: 10px 0 0;
       }
       #user {
         display: flex;
         align-items: center;
         gap: 10px;
       }
-      #status {
-        font-size: 12px;
-        color: #666;
-        margin-top: 12px;
-      }
     </style>
   </head>
   <body>
-    <h1>🔒 Project Lockdown</h1>
-    <p class="muted">Monitoring is disclosed. Sign in to enable it on this device.</p>
-    <div id="signed-out" hidden>
-      <button id="signin">Sign in</button>
+    <header>
+      <span class="brand">🔒 Project Lockdown</span>
+    </header>
+    <div id="body">
+      <p id="status">Loading…</p>
+      <div id="signed-out" hidden>
+        <button id="signin" class="primary">Sign in</button>
+        <p class="hint">Opens sign-in in a new tab. After you sign in, monitoring activates automatically.</p>
+      </div>
+      <div id="signed-in" hidden>
+        <div id="user"></div>
+      </div>
     </div>
-    <div id="signed-in" hidden>
-      <div id="user"></div>
-    </div>
-    <div id="status">Loading…</div>
     <script type="module" src="popup.js"></script>
   </body>
 </html>
