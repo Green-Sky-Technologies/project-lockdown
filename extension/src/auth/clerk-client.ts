@@ -1,37 +1,50 @@
 /**
- * Clerk client factories (SDK v3, vanilla / no-React path).
+ * Clerk client factories — STANDALONE session (no sync host).
  *
- * - Background/service worker: `createClerkClient({ background: true })` (async).
- * - Popup: `createClerkClient({...})` (sync). Both sync auth state from the
- *   dashboard origin (`syncHost`) — an extension can't hold its own Clerk session
- *   origin, so it mirrors one from the companion web app.
+ * The extension holds its own Clerk session in chrome.storage (shared across the
+ * popup, background worker, and the sign-in page). Sign-in happens on a full
+ * extension PAGE (stable DOM that survives the OAuth redirect), configured via
+ * clerk.load() with `allowedRedirectProtocols: ['chrome-extension:']` so the
+ * post-OAuth redirect returns to the extension.
  */
 import { createClerkClient } from '@clerk/chrome-extension/client';
 
-import { CLERK_PUBLISHABLE_KEY, SYNC_HOST } from '../config';
+import { CLERK_PUBLISHABLE_KEY } from '../config';
 
+/** The extension's own full-page sign-in URL (a chrome-extension:// page). */
+export function signinPageUrl(): string {
+  return chrome.runtime.getURL('signin.html');
+}
+
+/**
+ * Full DOM client for the sign-in PAGE. Loads with extension redirect config so
+ * OAuth (Google, etc.) returns to the extension instead of a web origin.
+ */
+export async function getPageClerk() {
+  const clerk = createClerkClient({ publishableKey: CLERK_PUBLISHABLE_KEY });
+  const url = signinPageUrl();
+  await clerk.load({
+    allowedRedirectProtocols: ['chrome-extension:'],
+    signInForceRedirectUrl: url,
+    signUpForceRedirectUrl: url,
+    afterSignOutUrl: url,
+  });
+  return clerk;
+}
+
+/**
+ * Background client for the worker + popup reads (no UI). Shares the session
+ * (chrome.storage) with the sign-in page and refreshes the session token.
+ */
 type BackgroundClerk = Awaited<ReturnType<typeof createClerkClient>>;
-
 let bgClientPromise: Promise<BackgroundClerk> | null = null;
 
-/** Cached background client for the service worker (keeps the token fresh). */
 export function getBackgroundClerk(): Promise<BackgroundClerk> {
   if (!bgClientPromise) {
     bgClientPromise = createClerkClient({
       publishableKey: CLERK_PUBLISHABLE_KEY,
-      syncHost: SYNC_HOST,
       background: true,
     });
   }
   return bgClientPromise;
-}
-
-/** A loaded popup client (DOM context). */
-export async function getPopupClerk() {
-  const clerk = createClerkClient({
-    publishableKey: CLERK_PUBLISHABLE_KEY,
-    syncHost: SYNC_HOST,
-  });
-  await clerk.load();
-  return clerk;
 }

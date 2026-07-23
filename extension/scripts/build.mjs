@@ -71,9 +71,16 @@ await esbuild.build({
   outfile: resolve(dist, 'popup.js'),
   format: 'esm',
 });
+await esbuild.build({
+  ...common,
+  entryPoints: [resolve(root, 'src/signin/signin.ts')],
+  outfile: resolve(dist, 'signin.js'),
+  format: 'esm',
+});
 
 // 4. Static assets.
 await cp(resolve(root, 'manifest.json'), resolve(dist, 'manifest.json'));
 await cp(resolve(root, 'src/popup/popup.html'), resolve(dist, 'popup.html'));
+await cp(resolve(root, 'src/signin/signin.html'), resolve(dist, 'signin.html'));
 
 console.log('built extension -> dist/ (load unpacked at chrome://extensions)');
