@@ -57,6 +57,20 @@ def test_healthz_is_open():
     assert r.status_code == 200
 
 
+def test_authorized_parties_parse_from_comma_string():
+    """Regression: pydantic-settings must accept a comma-separated env string for
+    the list[str] fields (NoDecode), not just a JSON array."""
+    s = Settings(
+        _env_file=None,
+        clerk_authorized_parties="chrome-extension://abc,http://localhost:3000",
+        cors_allow_origins="http://a.com, http://b.com",
+    )
+    assert s.clerk_authorized_parties == ["chrome-extension://abc", "http://localhost:3000"]
+    assert s.cors_allow_origins == ["http://a.com", "http://b.com"]
+    # JSON form still works
+    assert Settings(_env_file=None, clerk_authorized_parties='["x","y"]').clerk_authorized_parties == ["x", "y"]
+
+
 def test_rate_limit_returns_429():
     """A tiny bucket (burst=2, ~0 refill) trips 429 after the burst is spent."""
     client = _client(require_auth=False, rate_limit_per_minute=1, rate_limit_burst=2)

@@ -7,22 +7,28 @@ All secrets and model ids come from the environment / a gitignored ``.env`` via
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _as_str_list(v: object) -> object:
-    """Accept a JSON list, a comma-separated string, or an actual list for list[str]
-    settings. A bare comma-string is a common env footgun (e.g. Clerk's
-    authorized_parties, which MUST be a real list) — normalize it here."""
+    """Normalize a list[str] setting from env: accept a JSON list, a
+    comma-separated string, or an actual list — always return a list. Paired with
+    ``NoDecode`` on the field so pydantic-settings hands us the RAW string instead
+    of trying (and failing) to JSON-decode a comma-string itself."""
     if isinstance(v, str):
         s = v.strip()
         if not s:
             return []
         if s.startswith("["):
-            return v  # let pydantic parse the JSON list
+            try:
+                return json.loads(s)
+            except ValueError:
+                pass
         return [p.strip() for p in s.split(",") if p.strip()]
     return v
 
@@ -68,7 +74,8 @@ class Settings(BaseSettings):
     clerk_secret_key: str | None = Field(default=None, alias="CLERK_SECRET_KEY")
     # The `azp` claim must match one of these: the extension origin + dashboard
     # origin, e.g. ["chrome-extension://<id>", "https://dash.example.com"].
-    clerk_authorized_parties: list[str] = Field(default_factory=list)
+    # NoDecode → accept a comma-separated string in env (see _as_str_list).
+    clerk_authorized_parties: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # ESCAPE HATCH: false lets the core run unauthenticated for LOCAL DEV only.
     # Production MUST set this true so every stored verdict is attributable (§8).
     require_auth: bool = True
@@ -84,7 +91,7 @@ class Settings(BaseSettings):
     # --- CORS -------------------------------------------------------------- #
     # Default "*" for local dev; in production set the extension + dashboard
     # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
-    cors_allow_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
 
     @field_validator("clerk_authorized_parties", "cors_allow_origins", mode="before")
     @classmethod
