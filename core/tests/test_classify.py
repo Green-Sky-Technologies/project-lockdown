@@ -14,8 +14,11 @@ from lockdown_core.settings import Settings
 @pytest.fixture
 def client() -> TestClient:
     # These tests exercise classify logic; the LangGraph pipeline has its own
-    # test (test_pipeline.py), so run against the NoOp pipeline here.
-    app = create_app(Settings(use_fake_classifier=True, use_langgraph_pipeline=False))
+    # test (test_pipeline.py), and auth has test_auth.py — so run against the
+    # NoOp pipeline with auth disabled here.
+    app = create_app(
+        Settings(use_fake_classifier=True, use_langgraph_pipeline=False, require_auth=False)
+    )
     return TestClient(app)
 
 

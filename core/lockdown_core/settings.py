@@ -7,10 +7,30 @@ All secrets and model ids come from the environment / a gitignored ``.env`` via
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def _as_str_list(v: object) -> object:
+    """Normalize a list[str] setting from env: accept a JSON list, a
+    comma-separated string, or an actual list — always return a list. Paired with
+    ``NoDecode`` on the field so pydantic-settings hands us the RAW string instead
+    of trying (and failing) to JSON-decode a comma-string itself."""
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("["):
+            try:
+                return json.loads(s)
+            except ValueError:
+                pass
+        return [p.strip() for p in s.split(",") if p.strip()]
+    return v
 
 
 class Settings(BaseSettings):
@@ -48,6 +68,35 @@ class Settings(BaseSettings):
     # Wire the LangGraph async pipeline (design doc §7). Off in unit tests that
     # only exercise classify logic; on by default at the composition root.
     use_langgraph_pipeline: bool = True
+
+    # --- Auth (Clerk) ------------------------------------------------------ #
+    # Verified statelessly via JWKS by clerk-backend-api (no key stored client-side).
+    clerk_secret_key: str | None = Field(default=None, alias="CLERK_SECRET_KEY")
+    # The `azp` claim must match one of these: the extension origin + dashboard
+    # origin, e.g. ["chrome-extension://<id>", "https://dash.example.com"].
+    # NoDecode → accept a comma-separated string in env (see _as_str_list).
+    clerk_authorized_parties: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # ESCAPE HATCH: false lets the core run unauthenticated for LOCAL DEV only.
+    # Production MUST set this true so every stored verdict is attributable (§8).
+    require_auth: bool = True
+
+    # --- Persistence (Neon) — wired in A2 ---------------------------------- #
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")  # pooled -pooler string
+    persist_verdicts: bool = True
+
+    # --- Per-account rate limiting (in-memory MVP) ------------------------- #
+    rate_limit_per_minute: int = 30
+    rate_limit_burst: int = 10
+
+    # --- CORS -------------------------------------------------------------- #
+    # Default "*" for local dev; in production set the extension + dashboard
+    # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+
+    @field_validator("clerk_authorized_parties", "cors_allow_origins", mode="before")
+    @classmethod
+    def _split_lists(cls, v: object) -> object:
+        return _as_str_list(v)
 
 
 @lru_cache

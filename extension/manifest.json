@@ -3,15 +3,22 @@
   "name": "Project Lockdown",
   "version": "0.1.0",
   "description": "Opt-in, disclosed safety guard in front of chatbots. See technical-design-doc.md.",
-  "permissions": ["storage"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzWPllrq8Sy5M7QDq+uYsVjVibvW0SkK8NQsduTxpHJVy7UP4Vu4eeBwEspzFYocrMDO9jW6Sph2vqE3IZDSSKTGLiuFncynxTem+U2PfSCFo7Ahliyx0QbFuUMgXBfSoMrL5BDgilyIrZS2YK53877xQ0jb6UBdGocXWnCqDRAJTEKTOKA1R12voydEb44gKIwG3i4ZnuVID19dYh7X6sEVshAvM5S+DZw5OeKvO7uftMHfXkAsP+VQa43LAVon1IkQ0cy1gXCxVb7MSMbSZk6WGfkEnkUwmccbQn4ngZhbybIhvEcXyYrR5boUg+zGLYro0fqj1L7rr/NQkurAKUwIDAQAB",
+  "permissions": ["storage", "cookies"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://claude.ai/*",
     "https://gemini.google.com/*",
     "http://localhost:8000/*",
+    "http://localhost:3000/*",
     "http://localhost/*",
-    "https://project-lockdown-test.vercel.app/*"
+    "https://project-lockdown-test.vercel.app/*",
+    "https://*.clerk.accounts.dev/*"
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Project Lockdown"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
