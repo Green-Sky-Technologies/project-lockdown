@@ -1,7 +1,7 @@
 {
   "name": "project-lockdown-dashboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Minimal read-only dashboard: adults review their flagged verdicts. Also the Clerk sync host for the extension.",
   "scripts": {
     "dev": "next dev",
