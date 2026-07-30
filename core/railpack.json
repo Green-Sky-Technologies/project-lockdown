@@ -1,11 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "provider": "python",
-  "steps": {
-    "install": {
-      "commands": ["pip install -r requirements.txt"]
-    }
-  },
   "deploy": {
     "startCommand": "python -m uvicorn lockdown_core.app:app --host 0.0.0.0 --port $PORT"
   }
