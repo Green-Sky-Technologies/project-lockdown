@@ -8,6 +8,7 @@ rate limit — 401 for anonymous, 429 when over the limit.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from fastapi import HTTPException, Request
@@ -15,6 +16,8 @@ from fastapi import HTTPException, Request
 from lockdown_core.auth.clerk import LOCAL_DEV, AuthContext, AuthError, verify_request
 from lockdown_core.auth.ratelimit import RateLimiter
 from lockdown_core.settings import Settings
+
+logger = logging.getLogger("lockdown.auth")
 
 
 def build_authorizer(settings: Settings, limiter: RateLimiter) -> Callable[[Request], AuthContext]:
@@ -26,8 +29,15 @@ def build_authorizer(settings: Settings, limiter: RateLimiter) -> Callable[[Requ
                     secret_key=settings.clerk_secret_key,
                     authorized_parties=settings.clerk_authorized_parties,
                 )
-            except AuthError:
-                # Don't leak the reason to the caller; log server-side if needed.
+            except AuthError as e:
+                # 401 to the caller (no reason leaked), but log the reason + the
+                # configured authorized_parties server-side so misconfigured
+                # deployments are debuggable.
+                logger.warning(
+                    "auth rejected: %s | authorized_parties=%s",
+                    e,
+                    settings.clerk_authorized_parties,
+                )
                 raise HTTPException(status_code=401, detail="authentication required")
         else:
             auth = LOCAL_DEV
