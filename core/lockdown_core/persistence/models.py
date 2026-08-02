@@ -43,6 +43,30 @@ class Account(Base):
     )
 
 
+class DeviceToken(Base):
+    """A long-lived, revocable credential a parent pastes into the extension.
+
+    The plaintext (``pld_live_…``) is shown ONCE at creation and never stored —
+    only its SHA-256 hash lives here, so a DB read can resolve an incoming token
+    to its account but the DB never holds a usable secret. No ``expires_at``:
+    tokens live until ``revoked_at`` is set (revocation is the safety valve).
+    """
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class VerdictRecord(Base):
     __tablename__ = "verdict_records"
     __table_args__ = (

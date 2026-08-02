@@ -123,3 +123,64 @@ table.verdicts th {
   background: var(--crisis-bg);
   border: 1px solid var(--crisis-border);
 }
+
+/* --- Extension device tokens (settings) --- */
+.token-generate {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 20px 0 8px;
+}
+.token-name {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.token-generate .button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+.token-reveal {
+  margin: 12px 0 4px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+}
+.token-value {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+.token-value code {
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+.button-sm {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.button-sm.danger {
+  background: transparent;
+  color: #ff8a8a;
+  border-color: var(--crisis-border);
+}
