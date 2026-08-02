@@ -13,6 +13,14 @@ declare const __DEFAULT_CORE_URL__: string;
 export const CLERK_PUBLISHABLE_KEY = __CLERK_PUBLISHABLE_KEY__;
 export const SYNC_HOST = __SYNC_HOST__;
 
+/**
+ * Where the user signs in: the dashboard's sign-in page (the sync host). The
+ * extension never hosts its own sign-in — it syncs the session from here.
+ */
+export function signinUrl(): string {
+  return `${SYNC_HOST.replace(/\/$/, '')}/sign-in`;
+}
+
 /** Detection-core base URL: chrome.storage override, else the baked default. */
 export async function getCoreUrl(): Promise<string> {
   const { coreUrl } = await chrome.storage.local.get('coreUrl');

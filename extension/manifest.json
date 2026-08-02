@@ -13,6 +13,8 @@
     "http://localhost:3000/*",
     "http://localhost/*",
     "https://project-lockdown-test.vercel.app/*",
+    "https://project-lockdown-brown.vercel.app/*",
+    "https://project-lockdown-production.up.railway.app/*",
     "https://*.clerk.accounts.dev/*"
   ],
   "action": {

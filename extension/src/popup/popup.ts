@@ -19,7 +19,8 @@ async function main() {
   }
 
   // Clerk is imported dynamically so a dev build doesn't bundle it into popup.js.
-  const { getBackgroundClerk, signinPageUrl } = await import('../auth/clerk-client');
+  const { getBackgroundClerk } = await import('../auth/clerk-client');
+  const { signinUrl } = await import('../config');
 
   let clerk;
   try {
@@ -51,11 +52,12 @@ async function main() {
       const inBtn = document.createElement('button');
       inBtn.className = 'primary';
       inBtn.textContent = 'Sign in';
-      inBtn.addEventListener('click', () => chrome.tabs.create({ url: signinPageUrl() }));
+      inBtn.addEventListener('click', () => chrome.tabs.create({ url: signinUrl() }));
 
       const hint = document.createElement('p');
       hint.className = 'hint';
-      hint.textContent = 'Opens a sign-in page. After you sign in, reopen this popup.';
+      hint.textContent =
+        'Opens the dashboard to sign in. After you sign in there, reopen this popup.';
 
       actions.append(inBtn, hint);
     }
