@@ -27,17 +27,10 @@ async function loadDotenv(path) {
 await loadDotenv(resolve(root, '.env'));
 
 // Build-time config (no secrets in source). Override via extension/.env or env.
-const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || 'pk_test_REPLACE_ME';
-const SYNC_HOST = process.env.SYNC_HOST || 'http://localhost:3000';
+// Auth is a device token pasted at runtime — nothing secret is baked in.
 const DEFAULT_CORE_URL = process.env.DEFAULT_CORE_URL || 'http://localhost:8000';
-// DEV bypass: DEV_SKIP_AUTH=1 builds the extension without sign-in (and drops
-// Clerk from the worker/popup bundles). Local testing only — off by default.
-const DEV_SKIP_AUTH = process.env.DEV_SKIP_AUTH === '1' || process.env.DEV_SKIP_AUTH === 'true';
-if (DEV_SKIP_AUTH) console.warn('[build] DEV_SKIP_AUTH on — extension skips sign-in (dev only).');
-
-if (CLERK_PUBLISHABLE_KEY === 'pk_test_REPLACE_ME') {
-  console.warn('[build] CLERK_PUBLISHABLE_KEY not set — auth will not work until you set it.');
-}
+// Dashboard origin — where the popup sends the parent to generate a device token.
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:3000';
 
 // 1. Sync the wordlist from the canonical core copy.
 execFileSync(process.execPath, [resolve(here, 'gen-wordlist.mjs')], { stdio: 'inherit' });
@@ -47,24 +40,14 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 
 // 3. Bundle. Content script as IIFE (injected into the page); background + popup
-//    as ES modules. Clerk (in background/popup) expects a browser-ish global env.
+//    as ES modules. No Clerk SDK — auth is a stored device token, so bundles stay tiny.
 const define = {
-  __CLERK_PUBLISHABLE_KEY__: JSON.stringify(CLERK_PUBLISHABLE_KEY),
-  __SYNC_HOST__: JSON.stringify(SYNC_HOST),
   __DEFAULT_CORE_URL__: JSON.stringify(DEFAULT_CORE_URL),
-  __DEV_SKIP_AUTH__: JSON.stringify(DEV_SKIP_AUTH),
+  __DASHBOARD_URL__: JSON.stringify(DASHBOARD_URL),
   'process.env.NODE_ENV': JSON.stringify('production'),
   global: 'globalThis',
 };
-// In dev-bypass builds, alias the Clerk SDK to a stub so its ~5MB isn't bundled
-// into the service worker (dead weight that can crash the SW on reload).
-const alias = DEV_SKIP_AUTH
-  ? {
-      '@clerk/chrome-extension/client': resolve(root, 'src/auth/clerk-stub.ts'),
-      '@clerk/chrome-extension': resolve(root, 'src/auth/clerk-stub.ts'),
-    }
-  : {};
-const common = { bundle: true, target: 'es2020', logLevel: 'info', define, alias };
+const common = { bundle: true, target: 'es2020', logLevel: 'info', define };
 
 await esbuild.build({
   ...common,

@@ -20,6 +20,26 @@ from lockdown_core.persistence.models import Account, VerdictRecord
 logger = logging.getLogger("lockdown.persistence")
 
 
+async def get_or_create_account(
+    session: AsyncSession, *, clerk_user_id: str, clerk_org_id: str | None
+) -> Account:
+    """Resolve the account for a Clerk user, creating it on first sight. Shared by
+    verdict persistence and device-token minting so both attribute to one row."""
+    existing = (
+        await session.execute(select(Account).where(Account.clerk_user_id == clerk_user_id))
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    account = Account(
+        clerk_user_id=clerk_user_id,
+        clerk_org_id=clerk_org_id,
+        tier="school" if clerk_org_id else "family",
+    )
+    session.add(account)
+    await session.flush()  # assign account.id
+    return account
+
+
 def _parse_dt(iso: str) -> datetime:
     return datetime.fromisoformat(iso)
 
@@ -57,25 +77,6 @@ class VerdictRepository:
     def __init__(self, sessionmaker: async_sessionmaker) -> None:
         self._sessionmaker = sessionmaker
 
-    async def _get_or_create_account(
-        self, session: AsyncSession, *, clerk_user_id: str, clerk_org_id: str | None
-    ) -> Account:
-        existing = (
-            await session.execute(
-                select(Account).where(Account.clerk_user_id == clerk_user_id)
-            )
-        ).scalar_one_or_none()
-        if existing is not None:
-            return existing
-        account = Account(
-            clerk_user_id=clerk_user_id,
-            clerk_org_id=clerk_org_id,
-            tier="school" if clerk_org_id else "family",
-        )
-        session.add(account)
-        await session.flush()  # assign account.id
-        return account
-
     async def save(
         self, verdict: Verdict, *, clerk_user_id: str, clerk_org_id: str | None = None
     ) -> None:
@@ -83,7 +84,7 @@ class VerdictRepository:
         affect the lock decision (this runs off the response path)."""
         try:
             async with self._sessionmaker() as session:
-                account = await self._get_or_create_account(
+                account = await get_or_create_account(
                     session, clerk_user_id=clerk_user_id, clerk_org_id=clerk_org_id
                 )
                 fields = _record_fields(verdict)

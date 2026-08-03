@@ -14,7 +14,8 @@ from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from lockdown_core.auth.clerk import AuthContext
-from lockdown_core.auth.dependencies import build_authorizer
+from lockdown_core.auth.dependencies import build_authorizer, build_clerk_authorizer
+from lockdown_core.auth.device_router import build_device_token_router
 from lockdown_core.auth.ratelimit import RateLimiter
 from lockdown_core.classify.service import ClassificationService
 from lockdown_core.classify.types import Classifier
@@ -50,16 +51,25 @@ def _build_pipeline(settings: Settings) -> PipelineRunner:
     return LangGraphPipeline()
 
 
-def _build_repository(settings: Settings):
-    """The Neon verdict store, or None when persistence is off/unconfigured.
+def _build_persistence(settings: Settings):
+    """``(verdict_repo, device_token_repo)`` off one Neon engine, or ``(None, None)``.
 
-    Imported lazily HERE (composition root) so sqlalchemy stays off the hot path."""
-    if not settings.persist_verdicts or not settings.database_url:
-        return None
-    from lockdown_core.persistence import VerdictRepository, make_engine, make_sessionmaker
+    The device-token repo is built whenever a ``database_url`` is set (even if
+    verdict persistence is off) — extension auth needs it independent of whether
+    we're storing verdicts. Imported lazily HERE (composition root) so sqlalchemy
+    stays off the classifier hot path."""
+    if not settings.database_url:
+        return None, None
+    from lockdown_core.persistence import (
+        DeviceTokenRepository,
+        VerdictRepository,
+        make_engine,
+        make_sessionmaker,
+    )
 
-    engine = make_engine(settings.database_url)
-    return VerdictRepository(make_sessionmaker(engine))
+    sessionmaker = make_sessionmaker(make_engine(settings.database_url))
+    verdict_repo = VerdictRepository(sessionmaker) if settings.persist_verdicts else None
+    return verdict_repo, DeviceTokenRepository(sessionmaker)
 
 
 def build_service(settings: Settings | None = None) -> ClassificationService:
@@ -112,13 +122,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     service = build_service(settings)
+    repository, device_repo = _build_persistence(settings)
+
+    # Adapt the device-token repo into the resolver the authorizer expects:
+    # plaintext token -> AuthContext, or None when unknown/revoked.
+    device_resolver = None
+    if device_repo is not None:
+
+        async def device_resolver(token: str) -> AuthContext | None:
+            resolved = await device_repo.resolve(token)
+            if resolved is None:
+                return None
+            return AuthContext(
+                user_id=resolved.clerk_user_id, org_id=resolved.clerk_org_id, tier=resolved.tier
+            )
+
     authorize = build_authorizer(
         settings,
         RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst),
+        device_resolver=device_resolver,
     )
-    repository = _build_repository(settings)
     if repository is not None:
         from lockdown_core.persistence.repository import should_persist
+
+    # Parent-facing token management (Clerk-authed; the dashboard calls this).
+    app.include_router(
+        build_device_token_router(device_repo, build_clerk_authorizer(settings))
+    )
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:

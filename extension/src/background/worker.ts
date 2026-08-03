@@ -1,20 +1,15 @@
 /**
  * Background service worker: the ONLY component that talks to the detection core.
- * Content scripts hand it a ClassifyRequest; it attaches the signed-in user's
- * Clerk session token and POSTs to the core.
+ * Content scripts hand it a ClassifyRequest; it attaches the parent's device token
+ * (a `pld_live_…` Bearer credential from chrome.storage) and POSTs to the core.
  *
- * DEV bypass: when built with DEV_SKIP_AUTH=1, the worker skips sign-in entirely
- * and never imports Clerk — so background.js stays tiny (no 5.4MB Clerk SDK in
- * the service worker) and there's nothing to crash-loop on reload. Pair with the
- * core's LOCKDOWN_REQUIRE_AUTH=false. Production builds (flag off) require auth.
+ * No Clerk, no sign-in flow, no bundled SDK — auth is just a stored string. If the
+ * core is running with auth off (local dev) the request still works without a
+ * token; if auth is on and the token is missing/invalid the core returns 401 and
+ * we surface `needsSetup` so the popup prompts the parent to connect.
  */
 import type { ClassifyRequest, Verdict } from '../contract/verdict';
-import { getCoreUrl } from '../config';
-
-// Replaced at build time by esbuild `define`. `if (__DEV_SKIP_AUTH__)` branches
-// are dead-code-eliminated in the build that doesn't match, so the Clerk dynamic
-// import below is dropped entirely from a dev build.
-declare const __DEV_SKIP_AUTH__: boolean;
+import { getCoreUrl, getDeviceToken } from '../config';
 
 interface ClassifyMessage {
   type: 'classify';
@@ -25,19 +20,11 @@ interface ClassifyResponse {
   ok: boolean;
   verdict?: Verdict;
   error?: string;
-  needsSignIn?: boolean;
-}
-
-async function getToken(): Promise<string | null> {
-  if (__DEV_SKIP_AUTH__) return null;
-  const { getSessionToken } = await import('../auth/token');
-  return getSessionToken();
+  needsSetup?: boolean;
 }
 
 async function classify(payload: ClassifyRequest): Promise<ClassifyResponse> {
-  const token = await getToken();
-  if (!token && !__DEV_SKIP_AUTH__) return { ok: false, needsSignIn: true };
-
+  const token = await getDeviceToken();
   const coreUrl = await getCoreUrl();
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -48,7 +35,7 @@ async function classify(payload: ClassifyRequest): Promise<ClassifyResponse> {
       headers,
       body: JSON.stringify(payload),
     });
-    if (r.status === 401) return { ok: false, needsSignIn: true };
+    if (r.status === 401) return { ok: false, needsSetup: true };
     if (!r.ok) return { ok: false, error: `core ${r.status}` };
     return { ok: true, verdict: (await r.json()) as Verdict };
   } catch (e: unknown) {

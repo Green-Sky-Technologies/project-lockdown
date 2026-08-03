@@ -11,13 +11,16 @@ IMPORTANT: imports ``sqlalchemy`` and is wired only at the composition root
 architecture test enforces it.
 """
 
+from lockdown_core.persistence.device_tokens import DeviceTokenRepository
 from lockdown_core.persistence.engine import make_engine, make_sessionmaker
-from lockdown_core.persistence.models import Account, Base, VerdictRecord
+from lockdown_core.persistence.models import Account, Base, DeviceToken, VerdictRecord
 from lockdown_core.persistence.repository import VerdictRepository
 
 __all__ = [
     "Account",
     "Base",
+    "DeviceToken",
+    "DeviceTokenRepository",
     "VerdictRecord",
     "VerdictRepository",
     "make_engine",

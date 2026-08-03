@@ -151,7 +151,7 @@ def test_app_persists_locking_verdict_and_skips_no_action(monkeypatch):
         async def save(self, verdict, *, clerk_user_id, clerk_org_id=None):
             calls.append((verdict.recommended_action.value, clerk_user_id))
 
-    monkeypatch.setattr(appmod, "_build_repository", lambda s: RecordingRepo())
+    monkeypatch.setattr(appmod, "_build_persistence", lambda s: (RecordingRepo(), None))
     client = TestClient(
         appmod.create_app(
             Settings(

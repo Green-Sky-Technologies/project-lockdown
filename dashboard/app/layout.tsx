@@ -27,6 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a className="navlink" href="/verdicts">
                   Flagged
                 </a>
+                <a className="navlink" href="/settings">
+                  Extension
+                </a>
                 <UserButton />
               </SignedIn>
               <SignedOut>
