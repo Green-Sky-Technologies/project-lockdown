@@ -184,3 +184,29 @@ table.verdicts th {
   color: #ff8a8a;
   border-color: var(--crisis-border);
 }
+
+/* --- Privacy policy + footer --- */
+.sitefooter {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.policy {
+  max-width: 720px;
+}
+.policy p,
+.policy li {
+  color: var(--text);
+}
+.policy ul {
+  padding-left: 20px;
+}
+.policy li {
+  margin: 6px 0;
+}
+.policy a {
+  color: var(--accent);
+}

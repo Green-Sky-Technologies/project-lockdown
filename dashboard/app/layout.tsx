@@ -38,6 +38,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </header>
           <main className="content">{children}</main>
+          <footer className="sitefooter">
+            <a className="navlink" href="/privacy">
+              Privacy Policy
+            </a>
+          </footer>
         </body>
       </html>
     </ClerkProvider>
