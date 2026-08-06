@@ -6,7 +6,10 @@ export const metadata: Metadata = {
 };
 
 // Public page — not behind auth (middleware only protects /verdicts and /settings).
-export const dynamic = 'force-static';
+// Rendered per-request (not build-time prerendered): the root layout's Clerk
+// <SignedIn>/<SignedOut> components call auth(), which needs middleware/request
+// context that doesn't exist during static export. Matches /verdicts + /settings.
+export const dynamic = 'force-dynamic';
 
 const EFFECTIVE = 'August 3, 2026';
 const CONTACT = 'support@greensky.tech';
