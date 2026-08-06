@@ -27,6 +27,15 @@ await cp(dist, store, { recursive: true });
 const manifestPath = resolve(store, 'manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 delete manifest.key;
+
+// Drop dev-only localhost hosts — a packaged store build never talks to a local
+// core, and CWS reviewers flag unnecessary/broad host permissions.
+const isDevHost = (h) => h.startsWith('http://localhost');
+manifest.host_permissions = (manifest.host_permissions ?? []).filter((h) => !isDevHost(h));
+for (const cs of manifest.content_scripts ?? []) {
+  cs.matches = (cs.matches ?? []).filter((m) => !isDevHost(m));
+}
+
 await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
 // 3. Zip the store dir's CONTENTS (not the dir itself — CWS wants manifest at root).

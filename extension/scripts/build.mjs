@@ -71,5 +71,6 @@ await esbuild.build({
 // 4. Static assets.
 await cp(resolve(root, 'manifest.json'), resolve(dist, 'manifest.json'));
 await cp(resolve(root, 'src/popup/popup.html'), resolve(dist, 'popup.html'));
+await cp(resolve(root, 'icons'), resolve(dist, 'icons'), { recursive: true });
 
 console.log('built extension -> dist/ (load unpacked at chrome://extensions)');
