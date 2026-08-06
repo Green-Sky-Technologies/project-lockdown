@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-static';
 
 const EFFECTIVE = 'August 3, 2026';
-const CONTACT = 'privacy@your-domain.example'; // TODO: replace with a real contact address
+const CONTACT = 'support@greensky.tech';
 
 export default function PrivacyPage() {
   return (
