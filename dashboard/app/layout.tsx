@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import {
   ClerkProvider,
   SignInButton,
@@ -6,42 +7,45 @@ import {
   SignedOut,
   UserButton,
 } from '@clerk/nextjs';
+import { NavLinks } from './NavLinks';
+import { PREVIEW } from '@/lib/sample';
 import './globals.css';
 
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500'] });
+
 export const metadata: Metadata = {
-  title: 'Project Lockdown — Dashboard',
-  description: 'Review conversations flagged for your attention.',
+  title: 'Project Lockdown',
+  description: 'A quiet companion dashboard. When something needs a parent, it says so plainly.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
       <html lang="en">
-        <body>
+        <body className={inter.className}>
           <header className="topbar">
             <a className="brand" href="/">
-              🔒 Project Lockdown
+              <span className="brand-dot" aria-hidden />
+              Project Lockdown
             </a>
-            <nav>
+            <nav className="topnav">
+              {PREVIEW && <NavLinks />}
               <SignedIn>
-                <a className="navlink" href="/verdicts">
-                  Flagged
-                </a>
-                <a className="navlink" href="/settings">
-                  Extension
-                </a>
-                <UserButton />
+                <NavLinks />
+                <UserButton
+                  appearance={{
+                    elements: { avatarBox: { width: '28px', height: '28px' } },
+                  }}
+                />
               </SignedIn>
               <SignedOut>
                 <SignInButton mode="modal" />
               </SignedOut>
             </nav>
           </header>
-          <main className="content">{children}</main>
+          {children}
           <footer className="sitefooter">
-            <a className="navlink" href="/privacy">
-              Privacy Policy
-            </a>
+            <a href="/privacy">Privacy policy</a>
           </footer>
         </body>
       </html>

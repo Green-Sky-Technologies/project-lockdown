@@ -2,10 +2,14 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 // The dashboard is also the Clerk **sync host** for the extension (the extension
 // syncs its auth state from this origin), so Clerk middleware must run here.
-const isProtected = createRouteMatcher(['/verdicts(.*)', '/settings(.*)']);
+const isProtected = createRouteMatcher(['/activity(.*)', '/devices(.*)', '/settings(.*)']);
+
+// Dev-only design preview: LOCKDOWN_PREVIEW=1 lets the screens render with
+// sample data (lib/sample.ts) without a session. Ignored in production builds.
+const preview = process.env.LOCKDOWN_PREVIEW === '1' && process.env.NODE_ENV !== 'production';
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtected(req)) await auth.protect();
+  if (isProtected(req) && !preview) await auth.protect();
 });
 
 export const config = {
