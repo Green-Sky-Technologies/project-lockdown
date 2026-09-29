@@ -52,6 +52,31 @@ export async function listVerdicts(userId: string, orgId: string | null): Promis
   return rows as VerdictRow[];
 }
 
+/**
+ * Record the parent's review decision. Ownership is enforced in the UPDATE's
+ * WHERE clause, same as the reads — a wrong id updates nothing.
+ */
+export async function updateVerdictStatus(
+  id: string,
+  userId: string,
+  orgId: string | null,
+  status: 'reviewed' | 'snoozed' | 'dismissed',
+): Promise<void> {
+  const db = sql();
+  if (orgId) {
+    await db`
+      UPDATE verdict_records vr SET status = ${status}
+      FROM accounts a
+      WHERE a.id = vr.account_id AND vr.id = ${id}
+        AND (a.clerk_user_id = ${userId} OR vr.clerk_org_id = ${orgId})`;
+  } else {
+    await db`
+      UPDATE verdict_records vr SET status = ${status}
+      FROM accounts a
+      WHERE a.id = vr.account_id AND vr.id = ${id} AND a.clerk_user_id = ${userId}`;
+  }
+}
+
 /** Fetch one verdict, enforcing ownership in the query (never trust the URL id). */
 export async function getVerdict(
   id: string,
