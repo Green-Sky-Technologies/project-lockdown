@@ -18,9 +18,10 @@ HOT_PATH_MODULES = [
 
 
 # Heavy/optional deps that must stay off the classifier hot path (design doc §4.3):
-# the async pipeline (langgraph), auth (clerk_backend_api), and persistence (sqlalchemy)
-# are all wired only at the composition root.
-FORBIDDEN_ON_HOT_PATH = ["langgraph", "clerk_backend_api", "sqlalchemy"]
+# the async pipeline (langgraph), auth (clerk_backend_api), persistence (sqlalchemy),
+# and notification delivery (httpx for Resend; `resend` guarded pre-emptively should
+# the SDK ever be adopted) are all wired only at the composition root.
+FORBIDDEN_ON_HOT_PATH = ["langgraph", "clerk_backend_api", "sqlalchemy", "httpx", "resend"]
 
 
 def test_forbidden_deps_absent_from_hot_path():

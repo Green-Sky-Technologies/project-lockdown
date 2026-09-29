@@ -8,7 +8,9 @@ request path, §4.1):
             └─ not concerning ─────────────▶ CLEARED verdict, no lock
             └─ concerning ── LOCK now ──▶ PENDING verdict (lock overlay)
                     tier-2 (precise/verifying)
-                        └─ confirms ───────▶ CONFIRMED verdict ─▶ notify + pipeline
+                        └─ confirms ───────▶ CONFIRMED verdict ─▶ pipeline
+                        │                    (the /classify route dispatches the
+                        │                     parent notification in background)
                         └─ clears ─────────▶ OVERTURNED verdict (lock lifted)
 
 ``inline_tier2`` runs tier-2 in the same request (skeleton convenience / school
@@ -29,7 +31,6 @@ from lockdown_core.contract.actions import (
     Thresholds,
     crosses_lock_threshold,
     derive_action,
-    triggers_notification,
 )
 from lockdown_core.contract.verdict import (
     Category,
@@ -39,7 +40,6 @@ from lockdown_core.contract.verdict import (
     Status,
     Verdict,
 )
-from lockdown_core.notify.base import Notifier
 from lockdown_core.pipeline.base import PipelineRunner
 
 
@@ -52,16 +52,12 @@ class ClassificationService:
         self,
         *,
         classifier: Classifier,
-        notifier: Notifier,
         pipeline: PipelineRunner,
         thresholds: Thresholds,
-        default_recipient: str = "unconfigured-adult",
     ) -> None:
         self._classifier = classifier
-        self._notifier = notifier
         self._pipeline = pipeline
         self._thresholds = thresholds
-        self._default_recipient = default_recipient
 
     # ---- verdict assembly ------------------------------------------------- #
     def _assemble(
@@ -153,8 +149,6 @@ class ClassificationService:
         )
 
         if v2.status is Status.CONFIRMED:
-            if triggers_notification(v2.recommended_action):
-                await self._notifier.send(v2, recipient=self._default_recipient)
             await self._pipeline.run(v2)
 
         return v2

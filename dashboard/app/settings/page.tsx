@@ -1,13 +1,15 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { PREVIEW } from '@/lib/sample';
+import { getNotificationSettings, type NotifyChannel } from '@/lib/core';
+import { NotificationChannel } from './NotificationChannel';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Household, notification route, data policy. Two of the three sections are ahead
- * of the backend by design: there is no children model yet, and text/email alerts
- * aren't wired up — those affordances render disabled and say so, rather than
- * pretending to work.
+ * Household, notification route, data policy. The kids section is ahead of the
+ * backend by design (no children model yet) and renders disabled; the
+ * notification route is live against the core's /notification-settings, with
+ * SMS still a disabled "coming soon" affordance until Twilio lands.
  */
 export default async function SettingsPage() {
   const { userId } = await auth();
@@ -15,6 +17,18 @@ export default async function SettingsPage() {
 
   const user = userId ? await currentUser() : null;
   const email = user?.primaryEmailAddress?.emailAddress;
+
+  // Core unreachable (or preview mode) → show the default, non-interactive.
+  let channel: NotifyChannel = 'dashboard_only';
+  let channelEditable = false;
+  if (userId && !PREVIEW) {
+    try {
+      channel = (await getNotificationSettings()).channel;
+      channelEditable = true;
+    } catch {
+      channelEditable = false;
+    }
+  }
 
   return (
     <main className="content">
@@ -47,30 +61,7 @@ export default async function SettingsPage() {
           <span className="cap">Only ever when something needs you.</span>
         </div>
         <div className="setbody">
-          <div className="radio-row is-disabled">
-            <span className="radio-dot" />
-            <div className="rlabel">
-              <span className="rl">Text me straight away</span>
-              <span className="rc">Coming soon</span>
-            </div>
-          </div>
-          <div className="radio-row is-disabled">
-            <span className="radio-dot" />
-            <div className="rlabel">
-              <span className="rl">Email me instead</span>
-              <span className="rc">{email ? `${email} · coming soon` : 'Coming soon'}</span>
-            </div>
-          </div>
-          <div className="radio-row">
-            <span className="radio-dot is-checked" />
-            <div className="rlabel">
-              <span className="rl">Only in the dashboard</span>
-              <span className="rc">
-                For now, anything that needs you appears here first — nothing arrives on
-                your phone yet.
-              </span>
-            </div>
-          </div>
+          <NotificationChannel initial={channel} email={email} disabled={!channelEditable} />
         </div>
       </div>
 

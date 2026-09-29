@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
 
+    # --- Notifications (Resend) -------------------------------------------- #
+    # Without a key the app wires the logging notifier (mirrors the fake
+    # classifier fallback). The default sender is Resend's sandbox address —
+    # production sets a verified-domain sender.
+    resend_api_key: str | None = Field(default=None, alias="RESEND_API_KEY")
+    notify_from_email: str = "onboarding@resend.dev"
+
     # --- LangSmith tracing ------------------------------------------------- #
     # The langsmith SDK reads these from os.environ; we mirror them from .env
     # into the environment at startup (see app.apply_langsmith_env) so a plain

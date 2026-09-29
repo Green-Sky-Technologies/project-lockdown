@@ -38,6 +38,12 @@ class Account(Base):
     clerk_user_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     clerk_org_id: Mapped[str | None] = mapped_column(String, nullable=True)  # school tier
     tier: Mapped[str] = mapped_column(String, nullable=False, default="family")
+    # How the parent hears about a confirmed notify-verdict: "dashboard_only"
+    # (default) | "email" | "sms" (Twilio, later). The address/number itself is
+    # NOT stored — it's resolved from Clerk at send time (§8: privacy-minimal).
+    notify_channel: Mapped[str] = mapped_column(
+        String, nullable=False, default="dashboard_only", server_default="dashboard_only"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

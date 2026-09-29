@@ -99,7 +99,9 @@ def _app_with_token(monkeypatch, calls):
         async def save(self, verdict, *, clerk_user_id, clerk_org_id=None):
             calls.append((verdict.recommended_action.value, clerk_user_id))
 
-    monkeypatch.setattr(appmod, "_build_persistence", lambda s: (RecordingVerdictRepo(), repo))
+    monkeypatch.setattr(
+        appmod, "_build_persistence", lambda s: (RecordingVerdictRepo(), repo, None)
+    )
     client = TestClient(
         appmod.create_app(
             Settings(

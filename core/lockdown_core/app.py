@@ -1,8 +1,8 @@
 """FastAPI app — the composition root.
 
 Wires the classifier (real Anthropic SDK, or the deterministic fake when no key),
-the notifier stub, and the async pipeline. Keeps the hot path a thin
-``text in → verdict out`` HTTP surface.
+the notifier (Resend, or the logging stub when no key), and the async pipeline.
+Keeps the hot path a thin ``text in → verdict out`` HTTP surface.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from lockdown_core.auth.device_router import build_device_token_router
 from lockdown_core.auth.ratelimit import RateLimiter
 from lockdown_core.classify.service import ClassificationService
 from lockdown_core.classify.types import Classifier
-from lockdown_core.contract.actions import Thresholds
-from lockdown_core.contract.verdict import ClassifyRequest, Verdict
-from lockdown_core.notify.stub import LoggingNotifier
+from lockdown_core.contract.actions import Thresholds, triggers_notification
+from lockdown_core.contract.verdict import ClassifyRequest, Status, Verdict
+from lockdown_core.notify.base import Notifier
 from lockdown_core.pipeline.base import NoOpPipeline, PipelineRunner
 from lockdown_core.settings import Settings, get_settings
 
@@ -52,16 +52,19 @@ def _build_pipeline(settings: Settings) -> PipelineRunner:
 
 
 def _build_persistence(settings: Settings):
-    """``(verdict_repo, device_token_repo)`` off one Neon engine, or ``(None, None)``.
+    """``(verdict_repo, device_token_repo, prefs_repo)`` off one Neon engine, or
+    ``(None, None, None)``.
 
-    The device-token repo is built whenever a ``database_url`` is set (even if
-    verdict persistence is off) — extension auth needs it independent of whether
-    we're storing verdicts. Imported lazily HERE (composition root) so sqlalchemy
-    stays off the classifier hot path."""
+    The device-token and preferences repos are built whenever a ``database_url``
+    is set (even if verdict persistence is off) — extension auth and notification
+    routing need them independent of whether we're storing verdicts. Imported
+    lazily HERE (composition root) so sqlalchemy stays off the classifier hot
+    path."""
     if not settings.database_url:
-        return None, None
+        return None, None, None
     from lockdown_core.persistence import (
         DeviceTokenRepository,
+        NotificationPreferencesRepository,
         VerdictRepository,
         make_engine,
         make_sessionmaker,
@@ -69,14 +72,43 @@ def _build_persistence(settings: Settings):
 
     sessionmaker = make_sessionmaker(make_engine(settings.database_url))
     verdict_repo = VerdictRepository(sessionmaker) if settings.persist_verdicts else None
-    return verdict_repo, DeviceTokenRepository(sessionmaker)
+    return (
+        verdict_repo,
+        DeviceTokenRepository(sessionmaker),
+        NotificationPreferencesRepository(sessionmaker),
+    )
+
+
+def _build_notifier(settings: Settings) -> Notifier:
+    if not settings.resend_api_key:
+        logger.warning("Using LOG notifier (no RESEND_API_KEY).")
+        from lockdown_core.notify.stub import LoggingNotifier
+
+        return LoggingNotifier()
+    # Imported lazily HERE (composition root) so httpx stays off the hot path.
+    from lockdown_core.notify.resend import ResendNotifier
+
+    return ResendNotifier(
+        api_key=settings.resend_api_key, from_email=settings.notify_from_email
+    )
+
+
+def _build_dispatcher(settings: Settings, prefs_repo):
+    """Background notification dispatcher: prefs → Clerk email → notifier."""
+    from lockdown_core.notify.clerk_email import build_clerk_email_resolver
+    from lockdown_core.notify.dispatcher import NotificationDispatcher
+
+    return NotificationDispatcher(
+        notifier=_build_notifier(settings),
+        prefs=prefs_repo,
+        resolve_email=build_clerk_email_resolver(settings.clerk_secret_key),
+    )
 
 
 def build_service(settings: Settings | None = None) -> ClassificationService:
     settings = settings or get_settings()
     return ClassificationService(
         classifier=_build_classifier(settings),
-        notifier=LoggingNotifier(),
         pipeline=_build_pipeline(settings),
         thresholds=Thresholds(
             high_confidence=settings.high_confidence,
@@ -122,7 +154,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     service = build_service(settings)
-    repository, device_repo = _build_persistence(settings)
+    repository, device_repo, prefs_repo = _build_persistence(settings)
+    dispatcher = _build_dispatcher(settings, prefs_repo)
 
     # Adapt the device-token repo into the resolver the authorizer expects:
     # plaintext token -> AuthContext, or None when unknown/revoked.
@@ -145,9 +178,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if repository is not None:
         from lockdown_core.persistence.repository import should_persist
 
-    # Parent-facing token management (Clerk-authed; the dashboard calls this).
+    # Parent-facing token management + notification prefs (Clerk-authed; the
+    # dashboard calls these).
     app.include_router(
         build_device_token_router(device_repo, build_clerk_authorizer(settings))
+    )
+    from lockdown_core.notify.router import build_notification_settings_router
+
+    app.include_router(
+        build_notification_settings_router(prefs_repo, build_clerk_authorizer(settings))
     )
 
     @app.get("/healthz")
@@ -173,6 +212,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if repository is not None and should_persist(verdict):
             background.add_task(
                 repository.save,
+                verdict,
+                clerk_user_id=auth.user_id,
+                clerk_org_id=auth.org_id,
+            )
+
+        # Notify the parent off the response path, only for a verified verdict
+        # (§1: verified before alert — notify actions only exist at tier-2).
+        # dispatch() swallows its own errors, mirroring repository.save.
+        if verdict.status is Status.CONFIRMED and triggers_notification(
+            verdict.recommended_action
+        ):
+            background.add_task(
+                dispatcher.dispatch,
                 verdict,
                 clerk_user_id=auth.user_id,
                 clerk_org_id=auth.org_id,

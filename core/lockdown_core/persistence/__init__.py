@@ -14,6 +14,7 @@ architecture test enforces it.
 from lockdown_core.persistence.device_tokens import DeviceTokenRepository
 from lockdown_core.persistence.engine import make_engine, make_sessionmaker
 from lockdown_core.persistence.models import Account, Base, DeviceToken, VerdictRecord
+from lockdown_core.persistence.preferences import NotificationPreferencesRepository
 from lockdown_core.persistence.repository import VerdictRepository
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "Base",
     "DeviceToken",
     "DeviceTokenRepository",
+    "NotificationPreferencesRepository",
     "VerdictRecord",
     "VerdictRepository",
     "make_engine",
