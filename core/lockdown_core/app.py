@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import BackgroundTasks, Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from lockdown_core.auth.clerk import AuthContext
@@ -20,7 +20,7 @@ from lockdown_core.auth.ratelimit import RateLimiter
 from lockdown_core.classify.service import ClassificationService
 from lockdown_core.classify.types import Classifier
 from lockdown_core.contract.actions import Thresholds, triggers_notification
-from lockdown_core.contract.verdict import ClassifyRequest, Status, Verdict
+from lockdown_core.contract.verdict import ClassifyRequest, Stage, Status, Verdict
 from lockdown_core.notify.base import Notifier
 from lockdown_core.pipeline.base import NoOpPipeline, PipelineRunner
 from lockdown_core.settings import Settings, get_settings
@@ -193,6 +193,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": app.version}
 
+    async def _finalize_tier2(
+        req: ClassifyRequest, pending: Verdict, *, clerk_user_id: str, clerk_org_id: str | None
+    ) -> None:
+        """Background tier-2: verify the PENDING lock, persist the outcome, and
+        notify on a confirmed notify-action. The client polls /verdict-status for
+        the result (OVERTURNED → unlock; CONFIRMED → lock hardens). Never raises —
+        on failure the verdict simply stays PENDING for review."""
+        try:
+            v2 = await service.verify(pending, req, category=req.category_set[0])
+            if v2.stage is not Stage.TIER2:
+                return  # tier-2 failed; verify() already logged, lock stays PENDING
+            if repository is not None:
+                # Persist even OVERTURNED (its action may be NO_ACTION): the tier-2
+                # row IS the unlock signal the polling client waits for.
+                await repository.save(v2, clerk_user_id=clerk_user_id, clerk_org_id=clerk_org_id)
+            if v2.status is Status.CONFIRMED and triggers_notification(v2.recommended_action):
+                await dispatcher.dispatch(v2, clerk_user_id=clerk_user_id, clerk_org_id=clerk_org_id)
+        except Exception:  # noqa: BLE001 — background finalization must never propagate
+            logger.exception("async tier-2 finalization failed for verdict %s", pending.verdict_id)
+
+    @app.get("/verdict-status/{verdict_id}")
+    async def verdict_status(
+        verdict_id: str, auth: AuthContext = Depends(authorize)
+    ) -> dict[str, str]:
+        """Post-lock polling surface for the extension (device-token authed).
+        Reports the latest persisted stage of one of the caller's own verdicts."""
+        if repository is None:
+            raise HTTPException(status_code=503, detail="verdict store not configured")
+        view = await repository.get_status(verdict_id, clerk_user_id=auth.user_id)
+        if view is None:
+            raise HTTPException(status_code=404, detail="verdict not found")
+        return {
+            "verdict_id": view.verdict_id,
+            "stage": view.stage,
+            "status": view.status,
+            "recommended_action": view.recommended_action,
+        }
+
     @app.post("/classify", response_model=Verdict, response_model_exclude_none=False)
     async def classify(
         req: ClassifyRequest,
@@ -205,6 +243,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             req = req.model_copy(
                 update={"windowed_text": req.windowed_text[-settings.max_window_turns :]}
             )
+        # TEMPORARY: force async tier-2 even for clients still sending
+        # inline_tier2 (pre-async extension builds) — they get the fast PENDING
+        # lock; verification/notify happen in the background task below.
+        if req.inline_tier2 and not settings.honor_inline_tier2:
+            req = req.model_copy(update={"inline_tier2": False})
         verdict = await service.classify(req)
 
         # Persist lock/log verdicts off the response path (never NO_ACTION). A store
@@ -225,6 +268,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ):
             background.add_task(
                 dispatcher.dispatch,
+                verdict,
+                clerk_user_id=auth.user_id,
+                clerk_org_id=auth.org_id,
+            )
+
+        # A PENDING tier-1 lock means tier-2 hasn't run (async mode, or the
+        # inline pass degraded): finish verification off the response path so
+        # the lock lands at tier-1 latency. Runs after the save above, so the
+        # TIER1 row exists before the TIER2 row the client polls for.
+        if verdict.stage is Stage.TIER1 and verdict.status is Status.PENDING:
+            background.add_task(
+                _finalize_tier2,
+                req,
                 verdict,
                 clerk_user_id=auth.user_id,
                 clerk_org_id=auth.org_id,

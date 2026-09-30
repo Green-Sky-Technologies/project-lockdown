@@ -13,9 +13,10 @@ request path, §4.1):
                         │                     parent notification in background)
                         └─ clears ─────────▶ OVERTURNED verdict (lock lifted)
 
-``inline_tier2`` runs tier-2 in the same request (skeleton convenience / school
-inline mode); otherwise tier-2 + pipeline run asynchronously (M4 wires the
-background task) and the caller gets the PENDING verdict immediately.
+``inline_tier2`` runs tier-2 in the same request (school inline mode / tests);
+otherwise the caller gets the PENDING verdict immediately — it locks now — and
+the ``/classify`` route runs ``verify`` as a background task, persisting the
+tier-2 verdict that the client polls for via ``GET /verdict-status/{id}``.
 
 The verdict is assembled here; ``recommended_action`` is derived — never model-
 chosen — and is the single computed decision every surface renders from.
@@ -23,6 +24,7 @@ chosen — and is the single computed decision every surface renders from.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -41,6 +43,9 @@ from lockdown_core.contract.verdict import (
     Verdict,
 )
 from lockdown_core.pipeline.base import PipelineRunner
+
+
+logger = logging.getLogger("lockdown.classify")
 
 
 def _now_iso() -> str:
@@ -118,17 +123,31 @@ class ClassificationService:
 
         # Concerning: locked pending review (§2 — a false lock is recoverable).
         if not req.inline_tier2:
-            # M4 schedules tier-2 + pipeline as a background task; the client
-            # locks now on this PENDING verdict.
+            # The route schedules verify() + persistence + notify as a background
+            # task; the client locks now on this PENDING verdict.
             return v1
 
-        return await self._verify(v1, req, category=category)
+        return await self.verify(v1, req, category=category)
 
-    async def _verify(self, pending: Verdict, req: ClassifyRequest, *, category: Category) -> Verdict:
-        """Tier-2 verifying pass — the CONFIRMED verdict that gates notification."""
-        j2 = await self._classifier.judge(
-            tier=Stage.TIER2, window=req.windowed_text, category=category
-        )
+    async def verify(self, pending: Verdict, req: ClassifyRequest, *, category: Category) -> Verdict:
+        """Tier-2 verifying pass — the CONFIRMED verdict that gates notification.
+
+        A tier-2 failure (API error, malformed structured output — observed in
+        prod: the model occasionally emits truncated JSON) must not 500 the
+        child-facing endpoint. We degrade to the PENDING tier-1 verdict: the
+        client keeps its lock (§2 — a false lock is recoverable) and no notify
+        or pipeline runs without a verified verdict (§1: verified before alert).
+        """
+        try:
+            j2 = await self._classifier.judge(
+                tier=Stage.TIER2, window=req.windowed_text, category=category
+            )
+        except Exception:  # noqa: BLE001 — degrade, never break the lock decision
+            logger.exception(
+                "tier-2 verification failed for verdict %s; returning PENDING",
+                pending.verdict_id,
+            )
+            return pending
         confirmed = crosses_lock_threshold(
             derive_action(
                 category=category,

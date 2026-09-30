@@ -28,6 +28,7 @@ def _client(**overrides) -> TestClient:
     base = dict(
         _env_file=None,  # hermetic: ignore the developer's core/.env
         use_fake_classifier=True,
+        honor_inline_tier2=True,  # these tests exercise the inline (school-mode) contract
         use_langgraph_pipeline=False,
         persist_verdicts=False,
     )

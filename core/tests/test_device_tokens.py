@@ -107,6 +107,7 @@ def _app_with_token(monkeypatch, calls):
             Settings(
                 _env_file=None,
                 use_fake_classifier=True,
+                honor_inline_tier2=True,  # these tests exercise the inline (school-mode) contract
                 use_langgraph_pipeline=False,
                 require_auth=True,  # NB: no clerk_secret_key — device path never touches Clerk
                 persist_verdicts=True,

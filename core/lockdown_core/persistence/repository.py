@@ -9,6 +9,7 @@ contract render fields — never raw text (none exists in the Verdict).
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
@@ -18,6 +19,19 @@ from lockdown_core.contract.verdict import RecommendedAction, Verdict
 from lockdown_core.persistence.models import Account, VerdictRecord
 
 logger = logging.getLogger("lockdown.persistence")
+
+# Later stages supersede earlier ones when reporting a verdict's current state.
+_STAGE_RANK = {"RECALL_GATE": 0, "TIER1": 1, "TIER2": 2, "HUMAN": 3}
+
+
+@dataclass(frozen=True)
+class VerdictStatusView:
+    """The polling view of a verdict's lifecycle — the latest stage's row."""
+
+    verdict_id: str
+    stage: str
+    status: str
+    recommended_action: str
 
 
 async def get_or_create_account(
@@ -108,3 +122,29 @@ class VerdictRepository:
                 await session.commit()
         except Exception:  # noqa: BLE001 — persistence must never break classify
             logger.exception("failed to persist verdict %s", verdict.verdict_id)
+
+    async def get_status(
+        self, verdict_id: str, *, clerk_user_id: str
+    ) -> VerdictStatusView | None:
+        """Latest-stage state of a verdict, scoped to the caller's account.
+
+        Backs the extension's post-lock polling (unlock on OVERTURNED, harden on
+        CONFIRMED). Returns None for an unknown id or one owned by another
+        account — the caller can't distinguish the two, by design."""
+        async with self._sessionmaker() as session:
+            rows = (
+                await session.execute(
+                    select(VerdictRecord.stage, VerdictRecord.status, VerdictRecord.recommended_action)
+                    .join(Account, VerdictRecord.account_id == Account.id)
+                    .where(
+                        VerdictRecord.verdict_id == verdict_id,
+                        Account.clerk_user_id == clerk_user_id,
+                    )
+                )
+            ).all()
+        if not rows:
+            return None
+        stage, status, action = max(rows, key=lambda r: _STAGE_RANK.get(r[0], -1))
+        return VerdictStatusView(
+            verdict_id=verdict_id, stage=stage, status=status, recommended_action=action
+        )
