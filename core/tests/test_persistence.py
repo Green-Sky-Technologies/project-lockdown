@@ -151,12 +151,13 @@ def test_app_persists_locking_verdict_and_skips_no_action(monkeypatch):
         async def save(self, verdict, *, clerk_user_id, clerk_org_id=None):
             calls.append((verdict.recommended_action.value, clerk_user_id))
 
-    monkeypatch.setattr(appmod, "_build_persistence", lambda s: (RecordingRepo(), None))
+    monkeypatch.setattr(appmod, "_build_persistence", lambda s: (RecordingRepo(), None, None))
     client = TestClient(
         appmod.create_app(
             Settings(
                 _env_file=None,  # hermetic: ignore the developer's core/.env
                 use_fake_classifier=True,
+                honor_inline_tier2=True,  # these tests exercise the inline (school-mode) contract
                 use_langgraph_pipeline=False,
                 require_auth=False,
                 persist_verdicts=True,

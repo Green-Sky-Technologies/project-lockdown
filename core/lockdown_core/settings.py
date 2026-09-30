@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     # heuristic classifier instead of the real SDK (local dev / CI without keys).
     use_fake_classifier: bool = False
 
+    # TEMPORARY (until the async-aware extension is approved/rolled out): when
+    # false, the core IGNORES the client's ``inline_tier2`` and always verifies
+    # in the background — so extensions still sending ``inline_tier2: true`` get
+    # the fast PENDING lock too. Flip to true to honor the flag again (school
+    # inline mode); the async extension is unaffected either way.
+    honor_inline_tier2: bool = False
+
     # Wire the LangGraph async pipeline (design doc §7). Off in unit tests that
     # only exercise classify logic; on by default at the composition root.
     use_langgraph_pipeline: bool = True
@@ -92,6 +99,13 @@ class Settings(BaseSettings):
     # Default "*" for local dev; in production set the extension + dashboard
     # origins explicitly. (We use Bearer tokens, not cookies, so credentials off.)
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+
+    # --- Notifications (Resend) -------------------------------------------- #
+    # Without a key the app wires the logging notifier (mirrors the fake
+    # classifier fallback). The default sender is Resend's sandbox address —
+    # production sets a verified-domain sender.
+    resend_api_key: str | None = Field(default=None, alias="RESEND_API_KEY")
+    notify_from_email: str = "onboarding@resend.dev"
 
     # --- LangSmith tracing ------------------------------------------------- #
     # The langsmith SDK reads these from os.environ; we mirror them from .env

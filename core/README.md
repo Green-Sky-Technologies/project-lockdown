@@ -56,5 +56,5 @@ classifier hot-path import graph (enforced by `tests/test_architecture.py`).
 | `classify/service.py` | Tier-1 → lock → tier-2 orchestration; assembles the verdict |
 | `classify/anthropic_classifier.py` | Real tier-1/tier-2 structured-output calls (LangSmith-traced) |
 | `classify/fake.py` | Deterministic keyless classifier for tests/offline |
-| `notify/` | `Notifier` protocol + logging stub (Resend/Twilio drop in later) |
+| `notify/` | `Notifier` protocol, Resend email notifier, prefs-aware dispatcher + `/notification-settings` router (Twilio SMS drops in later) |
 | `pipeline/` | LangGraph async pipeline (stubbed nodes); protocol keeps it off the hot path |

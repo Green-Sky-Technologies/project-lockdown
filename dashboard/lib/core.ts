@@ -60,3 +60,27 @@ export async function revokeDeviceToken(id: string): Promise<void> {
   const r = await coreFetch(`/device-tokens/${id}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`core ${r.status} revoking device token`);
 }
+
+// "sms" exists in the core's read model but is not yet offered for writing.
+export type NotifyChannel = 'dashboard_only' | 'email' | 'sms';
+
+export interface NotificationSettings {
+  channel: NotifyChannel;
+}
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  const r = await coreFetch('/notification-settings');
+  if (!r.ok) throw new Error(`core ${r.status} reading notification settings`);
+  return (await r.json()) as NotificationSettings;
+}
+
+export async function updateNotificationSettings(
+  channel: 'dashboard_only' | 'email',
+): Promise<NotificationSettings> {
+  const r = await coreFetch('/notification-settings', {
+    method: 'PUT',
+    body: JSON.stringify({ channel }),
+  });
+  if (!r.ok) throw new Error(`core ${r.status} updating notification settings`);
+  return (await r.json()) as NotificationSettings;
+}
