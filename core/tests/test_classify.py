@@ -95,3 +95,39 @@ def test_verdict_id_stable_across_lifecycle(client):
     v = r.json()
     assert v["verdict_id"]
     assert v["schema_version"] == "1.0.0"
+
+
+def test_tier2_failure_degrades_to_pending_lock(monkeypatch):
+    """A tier-2 classifier failure (API error, malformed structured output) must
+    not 500 the child-facing endpoint: the caller gets the PENDING tier-1 lock
+    (§2 — recoverable), and no CONFIRMED verdict exists to notify on (§1)."""
+    import lockdown_core.app as appmod
+    from lockdown_core.classify.fake import FakeClassifier
+    from lockdown_core.contract.verdict import Stage
+
+    class Tier2Exploding(FakeClassifier):
+        async def judge(self, *, tier, window, category):
+            if tier is Stage.TIER2:
+                raise ValueError("malformed structured output")
+            return await super().judge(tier=tier, window=window, category=category)
+
+    monkeypatch.setattr(appmod, "_build_classifier", lambda s: Tier2Exploding())
+    client = TestClient(
+        appmod.create_app(
+            Settings(
+                _env_file=None,
+                use_fake_classifier=True,
+                use_langgraph_pipeline=False,
+                require_auth=False,
+            )
+        )
+    )
+
+    r = client.post(
+        "/classify",
+        json=_req("I'm going to shoot up the school tomorrow after school", inline_tier2=True),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "PENDING"  # still locked, awaiting verification
+    assert body["stage"] == "TIER1"

@@ -21,6 +21,7 @@ chosen — and is the single computed decision every surface renders from.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -41,6 +42,9 @@ from lockdown_core.contract.verdict import (
 )
 from lockdown_core.notify.base import Notifier
 from lockdown_core.pipeline.base import PipelineRunner
+
+
+logger = logging.getLogger("lockdown.classify")
 
 
 def _now_iso() -> str:
@@ -129,10 +133,24 @@ class ClassificationService:
         return await self._verify(v1, req, category=category)
 
     async def _verify(self, pending: Verdict, req: ClassifyRequest, *, category: Category) -> Verdict:
-        """Tier-2 verifying pass — the CONFIRMED verdict that gates notification."""
-        j2 = await self._classifier.judge(
-            tier=Stage.TIER2, window=req.windowed_text, category=category
-        )
+        """Tier-2 verifying pass — the CONFIRMED verdict that gates notification.
+
+        A tier-2 failure (API error, malformed structured output — observed in
+        prod: the model occasionally emits truncated JSON) must not 500 the
+        child-facing endpoint. We degrade to the PENDING tier-1 verdict: the
+        client keeps its lock (§2 — a false lock is recoverable) and no notify
+        or pipeline runs without a verified verdict (§1: verified before alert).
+        """
+        try:
+            j2 = await self._classifier.judge(
+                tier=Stage.TIER2, window=req.windowed_text, category=category
+            )
+        except Exception:  # noqa: BLE001 — degrade, never break the lock decision
+            logger.exception(
+                "tier-2 verification failed for verdict %s; returning PENDING",
+                pending.verdict_id,
+            )
+            return pending
         confirmed = crosses_lock_threshold(
             derive_action(
                 category=category,
