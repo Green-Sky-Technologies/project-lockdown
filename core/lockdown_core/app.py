@@ -243,6 +243,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             req = req.model_copy(
                 update={"windowed_text": req.windowed_text[-settings.max_window_turns :]}
             )
+        # TEMPORARY: force async tier-2 even for clients still sending
+        # inline_tier2 (pre-async extension builds) — they get the fast PENDING
+        # lock; verification/notify happen in the background task below.
+        if req.inline_tier2 and not settings.honor_inline_tier2:
+            req = req.model_copy(update={"inline_tier2": False})
         verdict = await service.classify(req)
 
         # Persist lock/log verdicts off the response path (never NO_ACTION). A store

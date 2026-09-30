@@ -49,7 +49,7 @@ class RecordingDispatcher:
         self.calls.append((verdict.recommended_action.value, verdict.status.value))
 
 
-def _app(monkeypatch, repo):
+def _app(monkeypatch, repo, *, honor_inline: bool = False):
     dispatcher = RecordingDispatcher()
     monkeypatch.setattr(appmod, "_build_persistence", lambda s: (repo, None, None))
     monkeypatch.setattr(appmod, "_build_dispatcher", lambda s, p: dispatcher)
@@ -60,6 +60,7 @@ def _app(monkeypatch, repo):
                 use_fake_classifier=True,
                 use_langgraph_pipeline=False,
                 require_auth=False,
+                honor_inline_tier2=honor_inline,
             )
         )
     )
@@ -113,9 +114,9 @@ def test_async_tier2_failure_leaves_pending_and_never_notifies(monkeypatch):
     assert dispatcher.calls == []  # §1: never notify without verification
 
 
-def test_inline_tier2_still_confirms_in_response(monkeypatch):
+def test_inline_tier2_still_confirms_in_response_when_honored(monkeypatch):
     repo = RecordingRepo()
-    client, dispatcher = _app(monkeypatch, repo)
+    client, dispatcher = _app(monkeypatch, repo, honor_inline=True)
 
     r = client.post(
         "/classify", json=_body("I'm planning to hurt Jake and I will get him", inline_tier2=True)
@@ -123,6 +124,22 @@ def test_inline_tier2_still_confirms_in_response(monkeypatch):
     assert r.status_code == 200
     assert r.json()["status"] == "CONFIRMED"
     assert repo.saves == [("TIER2", "CONFIRMED")]
+    assert dispatcher.calls == [("LOCK_AND_NOTIFY", "CONFIRMED")]
+
+
+def test_inline_tier2_is_ignored_by_default(monkeypatch):
+    """TEMPORARY rollout behavior: pre-async extension builds still send
+    inline_tier2 — the core ignores it, so they get the fast PENDING lock and
+    the background pass still verifies, persists, and notifies."""
+    repo = RecordingRepo()
+    client, dispatcher = _app(monkeypatch, repo)
+
+    r = client.post(
+        "/classify", json=_body("I'm planning to hurt Jake and I will get him", inline_tier2=True)
+    )
+    assert r.status_code == 200
+    assert (r.json()["stage"], r.json()["status"]) == ("TIER1", "PENDING")
+    assert repo.saves == [("TIER1", "PENDING"), ("TIER2", "CONFIRMED")]
     assert dispatcher.calls == [("LOCK_AND_NOTIFY", "CONFIRMED")]
 
 
