@@ -99,6 +99,14 @@ export interface ClassifyRequest {
   inline_tier2?: boolean;
 }
 
+/** GET /verdict-status/{id} — the post-lock polling view of a verdict. */
+export interface VerdictStatus {
+  verdict_id: string;
+  stage: Stage;
+  status: Status;
+  recommended_action: RecommendedAction;
+}
+
 // --- shared decision helpers (mirror core/contract/actions.py) -------------
 
 /** Actions at/above which the extension renders the lock overlay. */

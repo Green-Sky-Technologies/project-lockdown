@@ -65,8 +65,10 @@ def test_benign_verdict_does_not_dispatch(monkeypatch):
     assert recorder.calls == []
 
 
-def test_pending_tier1_verdict_does_not_dispatch(monkeypatch):
-    """Without inline_tier2 the verdict is PENDING (unverified) — never notify."""
+def test_pending_response_only_dispatches_after_background_verification(monkeypatch):
+    """Without inline_tier2 the RESPONSE is PENDING (unverified); notification
+    happens only via the background tier-2 pass, and only with the verified
+    CONFIRMED verdict — never the PENDING one (§1: verified before alert)."""
     client, recorder = _client(monkeypatch)
     r = client.post(
         "/classify",
@@ -74,4 +76,8 @@ def test_pending_tier1_verdict_does_not_dispatch(monkeypatch):
     )
     assert r.status_code == 200
     assert r.json()["status"] == "PENDING"
-    assert recorder.calls == []
+    # TestClient ran the background finalize before returning: the dispatched
+    # verdict is the CONFIRMED tier-2 one, never the PENDING response.
+    assert recorder.calls == [
+        ("LOCK_NOTIFY_AND_SURFACE_CRISIS_RESOURCES", "CONFIRMED", "local-dev")
+    ]

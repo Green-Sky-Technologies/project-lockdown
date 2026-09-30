@@ -6,13 +6,23 @@
  * The recall gate keeps innocent messages entirely local; only windows that hit
  * the wordlist are sent to the core (design doc §4.2, proportionate capture §4).
  */
-import { crossesLockThreshold, type ClassifyRequest, type Verdict } from '../contract/verdict';
+import {
+  crossesLockThreshold,
+  type ClassifyRequest,
+  type Verdict,
+  type VerdictStatus,
+} from '../contract/verdict';
 import { hostConfigFor } from '../hosts/registry';
 import type { HostConfig } from '../hosts/types';
 import { attachCapture } from './observer';
-import { showLock } from './overlay';
+import { releaseLock, showLock, updateLock } from './overlay';
 import { recallHit } from './recall';
 import { RollingWindow } from './window';
+
+// Post-lock polling cadence: the tier-2 verdict usually lands in ~3s; give up
+// after ~30s and keep the (recoverable §2) lock for parent review.
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS = 15;
 
 const cfg = resolveConfig();
 if (cfg) init(cfg);
@@ -50,10 +60,10 @@ function maybeClassify(cfg: HostConfig, win: RollingWindow): void {
       capture_surface: 'CHROMIUM_EXT',
       monitored_categories: ['VIOLENCE_TO_OTHERS'],
     },
-    // Skeleton: run both tiers in one call so a single response is a confirmed
-    // verdict. A production build returns the PENDING tier-1 lock immediately and
-    // confirms asynchronously.
-    inline_tier2: true,
+    // Async mode: the core answers with the PENDING tier-1 verdict (the lock
+    // lands at tier-1 latency) and verifies with tier-2 in the background; we
+    // poll /verdict-status to unlock on OVERTURNED or harden on CONFIRMED.
+    inline_tier2: false,
   };
 
   chrome.runtime.sendMessage(
@@ -68,7 +78,36 @@ function maybeClassify(cfg: HostConfig, win: RollingWindow): void {
         return;
       }
       if (!resp.ok || !resp.verdict) return;
-      if (crossesLockThreshold(resp.verdict.recommended_action)) showLock(resp.verdict);
+      const verdict = resp.verdict;
+      if (!crossesLockThreshold(verdict.recommended_action)) return;
+      showLock(verdict);
+      if (verdict.status === 'PENDING') pollVerdict(verdict);
     },
   );
+}
+
+/** Poll the tier-2 outcome for a PENDING lock: OVERTURNED lifts the overlay,
+ * CONFIRMED updates its copy ("adult notified"). Polling stops after a bounded
+ * number of attempts — an unresolved verdict keeps the recoverable lock. */
+function pollVerdict(pending: Verdict, attempt = 0): void {
+  if (attempt >= POLL_MAX_ATTEMPTS) return;
+  setTimeout(() => {
+    chrome.runtime.sendMessage(
+      { type: 'verdictStatus', verdictId: pending.verdict_id },
+      (resp?: { ok: boolean; status?: VerdictStatus; error?: string }) => {
+        if (chrome.runtime.lastError) return;
+        const s = resp?.status;
+        // 404 until the background tier-2 row lands — keep polling.
+        if (!resp?.ok || !s || s.stage === 'TIER1') {
+          pollVerdict(pending, attempt + 1);
+          return;
+        }
+        if (s.status === 'OVERTURNED') {
+          releaseLock();
+          return;
+        }
+        updateLock({ ...pending, status: s.status, recommended_action: s.recommended_action });
+      },
+    );
+  }, POLL_INTERVAL_MS);
 }

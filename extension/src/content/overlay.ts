@@ -8,6 +8,8 @@ import { triggersNotification, type Verdict } from '../contract/verdict';
 
 const OVERLAY_ID = 'lockdown-overlay';
 let locked = false;
+let overlayEl: HTMLDivElement | null = null;
+let remountObserver: MutationObserver | null = null;
 
 function copyFor(verdict: Verdict): { title: string; body: string; crisis: boolean } {
   const notified = triggersNotification(verdict.recommended_action);
@@ -28,26 +30,8 @@ function copyFor(verdict: Verdict): { title: string; body: string; crisis: boole
   };
 }
 
-export function showLock(verdict: Verdict): void {
-  if (locked) return;
-  locked = true;
-
+function render(el: HTMLElement, verdict: Verdict): void {
   const { title, body, crisis } = copyFor(verdict);
-  const el = document.createElement('div');
-  el.id = OVERLAY_ID;
-  Object.assign(el.style, {
-    position: 'fixed',
-    inset: '0',
-    zIndex: '2147483647',
-    background: 'rgba(18,18,24,0.98)',
-    color: '#f5f5f7',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-    font: '16px/1.5 system-ui, -apple-system, sans-serif',
-  } as CSSStyleDeclaration);
-
   const crisisHtml = crisis
     ? `<p style="margin-top:1rem;padding:0.75rem 1rem;border-radius:8px;background:#3a1d1d;">
          If there may be an immediate risk of harm, contact local emergency services (911 in the US)
@@ -65,6 +49,29 @@ export function showLock(verdict: Verdict): void {
         ${verdict.category.replace(/_/g, ' ').toLowerCase()}.
       </p>
     </div>`;
+}
+
+export function showLock(verdict: Verdict): void {
+  if (locked) return;
+  locked = true;
+
+  const el = document.createElement('div');
+  el.id = OVERLAY_ID;
+  Object.assign(el.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483647',
+    background: 'rgba(18,18,24,0.98)',
+    color: '#f5f5f7',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    font: '16px/1.5 system-ui, -apple-system, sans-serif',
+  } as CSSStyleDeclaration);
+
+  render(el, verdict);
+  overlayEl = el;
 
   const mount = () => {
     if (!document.getElementById(OVERLAY_ID)) document.documentElement.appendChild(el);
@@ -73,7 +80,26 @@ export function showLock(verdict: Verdict): void {
   document.documentElement.style.overflow = 'hidden';
 
   // Keep the overlay present if the SPA re-renders the DOM under it.
-  new MutationObserver(mount).observe(document.documentElement, { childList: true, subtree: true });
+  remountObserver = new MutationObserver(mount);
+  remountObserver.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+/** Re-render the overlay copy as the verdict lifecycle advances
+ * (PENDING "pending review" → CONFIRMED "adult notified"). */
+export function updateLock(verdict: Verdict): void {
+  if (!locked || !overlayEl) return;
+  render(overlayEl, verdict);
+}
+
+/** Tier-2 overturned the tier-1 lock — remove the overlay (§2: recoverable). */
+export function releaseLock(): void {
+  if (!locked) return;
+  locked = false;
+  remountObserver?.disconnect();
+  remountObserver = null;
+  document.getElementById(OVERLAY_ID)?.remove();
+  overlayEl = null;
+  document.documentElement.style.overflow = '';
 }
 
 export function isLocked(): boolean {
