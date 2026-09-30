@@ -32,7 +32,7 @@ body() {
 fail=0
 probe() {
   local name="$1" text="$2" want_status="$3"
-  local out code json summary
+  local out code json summary vid
   out=$(curl -sS -w "\n%{http_code}" --max-time 60 -X POST "$CORE_URL/classify" \
     -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" \
     -d "$(body "$text")" 2>&1)
@@ -42,9 +42,29 @@ probe() {
   if [ "$code" != "200" ]; then
     echo "FAIL  $name -> HTTP $code | $summary"
     fail=1
-  elif echo "$summary" | grep -q "^PENDING/TIER1"; then
-    echo "DEGRADED $name -> tier-2 failed, core returned safe PENDING lock | $summary"
-  elif echo "$summary" | grep -q "^$want_status"; then
+    return
+  fi
+  # Async contract: a locking verdict comes back PENDING/TIER1 immediately;
+  # tier-2 lands in the background — poll /verdict-status for the outcome.
+  if echo "$summary" | grep -q "^PENDING/TIER1"; then
+    vid=$(echo "$json" | jq -r '.verdict_id')
+    local tries=0 s
+    while [ $tries -lt 15 ]; do
+      sleep 2
+      s=$(curl -sS --max-time 20 -H "Authorization: Bearer $TOKEN" "$CORE_URL/verdict-status/$vid" \
+        | jq -r 'if .stage then "\(.status)/\(.stage)/\(.recommended_action)" else empty end' 2>/dev/null)
+      case "$s" in
+        CONFIRMED/*|OVERTURNED/*) break ;;
+      esac
+      tries=$((tries + 1))
+    done
+    if [ -z "${s:-}" ] || echo "$s" | grep -q "^PENDING"; then
+      echo "DEGRADED $name -> locked PENDING, tier-2 never landed (check core logs) | $summary"
+      return
+    fi
+    summary="$s (async, after PENDING lock)"
+  fi
+  if echo "$summary" | grep -q "^$want_status"; then
     echo "OK    $name -> $summary"
   else
     echo "FAIL  $name -> unexpected verdict | $summary"
